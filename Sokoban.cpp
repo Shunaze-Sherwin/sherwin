@@ -39,53 +39,58 @@ void Load_input(){
     }
 }
 
-//calculate distance-----------------------------------------------------------------------------------------------
-int cost[17][17];
+//calculate quality-----------------------------------------------------------------------------------------------
 string command[] = {"Down", "Up", "Right", "Left"};
 int dx[] = {0, 0, 1, -1};
 int dy[] = {1, -1, 0, 0};
 
-bool safe(int x, int y){
+bool safe(int x, int y, int cost[][17]){
     return x >= 1 && x <= 16 && y >= 1 && y <= 16 && current.get(x, y) && cost[x][y] == -1;
 }
 
-void bfs(pair<int, int> start, int cost[17][17]){
+void bfs(pair<int, int> start, int cost[][17]){
     queue<pair<int, int>> qu;
     qu.push(start);
     cost[start.first][start.second] = 0;
 
     while (!qu.empty()){
         pair<int, int> tmp = qu.front(); qu.pop();
+        cout << tmp.first << ' ' << tmp.second << '\n';
         fu(i, 0, 3){
             int x = tmp.first + dx[i];
             int y = tmp.second + dy[i];
-            if (!safe(x, y)) continue;
+            if (!safe(x, y, cost)) continue;
             cost[x][y] = cost[tmp.first][tmp.second] + 1;
             qu.push({x, y});
         }
     }
 }
 
-int dist(pair<int, int> start, pair<int, int> box){
-    memset(cost, -1, sizeof(cost));
+int dist(pair<int, int> start, pair<int, int> target){
+    int cost[17][17]; memset(cost, -1, sizeof(cost));
     bfs(start, cost);
+    return cost[target.first][target.second];
+}
 
-    int answer = INT_MAX;
-    fu(i, 0, 3){
-        int stand_x = box.first - dx[i];
-        int stand_y = box.second - dy[i];
-        int next_x = box.first + dx[i];
-        int next_y = box.second + dy[i];
+//Aplly move-----------------------------------------------------------------------------------------------
+State apply_move(State current, int direction){
+    int x = current.me.first + dx[direction];
+    int y = current.me.second + dy[direction];
 
-        if (next_x < 1 || next_x > 16 || next_y < 1 || next_y > 16) continue;
-        if (!current.get(next_x, next_y)) continue;
-        if (stand_x < 1 || stand_x > 16 || stand_y < 1 || stand_y > 16) continue;
-        if (cost[stand_x][stand_y] == -1) continue;
+    if (current.get(x, y) == 0) return current;
 
-        answer = min(answer, cost[stand_x][stand_y]);
+    for (int i = 0; i < current.box.size(); ++i){
+        if (current.box[i] == make_pair(x, y)){
+            int new_x = x + dx[direction];
+            int new_y = y + dy[direction];
+            if (current.get(new_x, new_y) == 0) return current;
+            current.box[i] = {new_x, new_y};
+            break;
+        }
     }
 
-    return answer == INT_MAX ? -1 : answer;
+    current.me = {x, y};
+    return current;
 }
 
 ////Call_functions----------------------------------------------------------------------------------------
@@ -109,9 +114,5 @@ signed main(){
     int number_table = 1;
     //cin >> numbertable;
     fu(i, 1, number_table) Load_input();
-//BFS-----------------------------------------------------------------------------------------------
-    memset(cost, -1, sizeof(cost));
     
-    
-
 }
