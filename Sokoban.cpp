@@ -2,8 +2,16 @@
 
 using namespace std;
 
+typedef long long ll;
+
 #define fu(i, a, b) for (int i = (a); i <= (b); ++i)
 #define fd(i, a, b) for (int i = (a); i >= (b); --i)
+
+mt19937 rng(chrono::steady_clock::now().time_since_epoch().count());
+
+ll Rand(ll l, ll r){
+    return l + rng() % (r - l + 1);
+}
 
 //Load Input----------------------------------------------------------------------------------------
 struct State{
@@ -93,6 +101,33 @@ State apply_move(State current, int direction){
     return current;
 }
 
+//Convert state to number-----------------------------------------------------------------------------------------------
+int code[17][17];
+
+void pre_hash_table(){
+    int cnt = 0;
+    fu(i, 1, 16) fu(j, 1, 16) code[i][j] = Rand(0, 1e14);
+}
+
+int hash_vector(vector<pair<int, int>> &carry){
+    int res = 0;
+    for (pair<int, int> tmp : carry) res += code[tmp.first][tmp.second];
+    return res;
+}
+
+array<int, 6> hash_table(State current){
+    array<int, 6> res = {0, 0, 0, 0, 0, 0};
+    res[0] = current.me.first * 100 + current.me.second;
+    res[1] = current.enemy.first * 100 + current.enemy.second;
+    res[2] = 0;
+    fu(i, 1, 16) fu(j, 1, 16) if (current.get(i, j)) res[2] += code[i][j];
+    res[3] = hash_vector(current.box);
+    res[4] = hash_vector(current.my_target);
+    res[5] = hash_vector(current.enemy_target);
+
+    return res;
+}
+
 ////Call_functions----------------------------------------------------------------------------------------
 signed main(){
     #define name "history"
@@ -114,5 +149,12 @@ signed main(){
     int number_table = 1;
     //cin >> numbertable;
     fu(i, 1, number_table) Load_input();
-    
+    pre_hash_table();
+
+    map<array<int, 6>, int> visted;
+    queue<State> qu;
+    qu.push(current);
+    visted[hash_table(current)] = 0;
+
+    //fu(step, 0, 0) current = apply_move(current, step);
 }
