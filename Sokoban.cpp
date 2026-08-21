@@ -9,14 +9,14 @@ struct State{
     int table[17][17];
     pair<int, int> me;
     pair<int, int> enemy;
-};
+} current;
 
 void Load_input(){
-    fu(i, 1, 16) {
-        fu(j, 1, 16) cout << '.';
-        cout << '\n';
+    fu(i, 1, 16) fu(j, 1, 16) cin >> current.table[i][j];
+    fu(i, 1, 16) fu(j, 1, 16){
+        if (current.table[i][j] == 'a') current.me = {i, j};
+        if (current.table[i][j] == 'b') current.enemy = {i, j};
     }
-
 }
 
 signed main(){
