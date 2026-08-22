@@ -7,6 +7,9 @@ typedef long long ll;
 #define fu(i, a, b) for (int i = (a); i <= (b); ++i)
 #define fd(i, a, b) for (int i = (a); i >= (b); --i)
 
+template<typename T> inline bool minimize(T &a, const T &b){return a > b ? a = b, 1 : 0;}
+template<typename T> inline bool maximize(T &a, const T &b){return a < b ? a = b, 1 : 0;}
+
 mt19937_64 rng(chrono::steady_clock::now().time_since_epoch().count());
 
 ll Rand(ll l, ll r){
@@ -33,6 +36,7 @@ struct State{
     int get(int x, int y) const{
         if (x < 1 || x > 16 || y < 1 || y > 16) return 0;
         if (x == enemy.first && y == enemy.second) return 0;
+        if (x == me.first && y == me.second) return 0;
 
         if (target[x][y] == 1) return 2;
         if (target[x][y] == -1) return -2;
@@ -44,30 +48,32 @@ struct State{
     // 1: empty
     // 2: my point
     // -2: enemy's point
-} current;
+};
 
-void Load_input(){
+State Load_input(){
+    State res;
     fu(i, 1, 16) fu(j, 1, 16) {
         char c; cin >> c;
-        if (c == 'a') current.me = {i, j};
-        if (c == 'b') current.enemy = {i, j};
+        if (c == 'a') res.me = {i, j};
+        if (c == 'b') res.enemy = {i, j};
         if (c == 'A') target[i][j] = 1;
         if (c == 'B') target[i][j] = -1;
-        if (c == 'X') current.box.push_back({i, j});
-        if (c != '#' && c != 'X' && c != 'a' && c != 'b' && c != 'A' && c != 'B') current.update(i, j, 1);
+        if (c == 'X') res.box.push_back({i, j});
+        if (c != '#' && c != 'X' && c != 'A' && c != 'B') res.update(i, j, 1);
     }
+    return res;
 }
 
-//calculate quality-----------------------------------------------------------------------------------------------
-string command[] = {"Down", "Up", "Right", "Left"};
+//calculate distance-----------------------------------------------------------------------------------------------
+string command[] = {"R", "L", "D", "U"};
 int dx[] = {0, 0, 1, -1};
 int dy[] = {1, -1, 0, 0};
 
-bool safe(int x, int y, const State &a){
-    return a.get(x, y) == 1;
+bool safe(int x, int y, const State &current){
+    return current.get(x, y) == 1;
 }
 
-array<array<int, 17>, 17> bfs(pair<int, int> start, const State &a){
+array<array<int, 17>, 17> bfs(pair<int, int> start, const State &current){
     array<array<int, 17>, 17> cost;
     fu(i, 1, 16) fu(j, 1, 16) cost[i][j] = -1;
     queue<pair<int, int>> qu;
@@ -79,7 +85,7 @@ array<array<int, 17>, 17> bfs(pair<int, int> start, const State &a){
         fu(i, 0, 3){
             int x = tmp.first + dx[i];
             int y = tmp.second + dy[i];
-            if (!safe(x, y, a) || cost[x][y] != -1) continue;
+            if (!safe(x, y, current) || cost[x][y] != -1) continue;
             cost[x][y] = cost[tmp.first][tmp.second] + 1;
             qu.push({x, y});
         }
@@ -87,14 +93,14 @@ array<array<int, 17>, 17> bfs(pair<int, int> start, const State &a){
     return cost;
 }
 
-int dist(pair<int, int> start, pair<int, int> target, const State &a){
-    array<array<int, 17>, 17> cost = bfs(start, a);
+int dist(pair<int, int> start, pair<int, int> target, const State &current){
+    array<array<int, 17>, 17> cost = bfs(start, current);
     return cost[target.first][target.second];
 }
 
 //Aplly move-----------------------------------------------------------------------------------------------
-bool find_box(const State &a, int x, int y){
-    for (pair<int, int> tmp : a.box) if (tmp == make_pair(x, y)) return true;
+bool find_box(const State &current, int x, int y){
+    for (pair<int, int> tmp : current.box) if (tmp == make_pair(x, y)) return true;
     return false;
 }
 
@@ -153,22 +159,54 @@ array<ll, 4> hash_table(State current){
     res[0] = current.me.first * 100 + current.me.second;
     res[1] = current.enemy.first * 100 + current.enemy.second;
     res[2] = hash_vector(current.box);
-    res[3] = current.my_score - current.enemy_score;
+    res[3] = current.my_score * 1000 + current.enemy_score;
 
     return res;
 }
 
-//Generate all possible moves-----------------------------------------------------------------------------------------------
-void generate_moves(const State &a){
-    fu(my_turn, 0, 3) fu(enemy_turn, 0, 3){
-        State a = apply_move(current, my_turn, true);
-        a = apply_move(a, enemy_turn, false);
+//Simulator-----------------------------------------------------------------------------------------------
+struct Move{
+    int move;
+    State nxt_state;
+};
 
-        State b = apply_move(current, enemy_turn, false);
-        b = apply_move(b, my_turn, true);
-        if (hash_table(a) != hash_table(b)) continue;
-        cout << command[my_turn] << " " << command[enemy_turn] << '\n';
+vector<Move> generate_moves(const State &current, bool my_turn){
+    vector<Move> res;
+    fu(move, 0, 3){
+        State next = apply_move(current, move, my_turn);
+        if (hash_table(next) == hash_table(current)) continue;
+        res.push_back({move, next});
     }
+    return res;
+}
+
+int quality(const State& current){
+    return current.my_score - current.enemy_score;
+}
+
+int number_step = 10;
+int chosen_move = -1;
+
+int simulator(State &current, int tick, int root_tick){
+    if (tick > number_step) return quality(current);
+    bool my_turn  = tick & 1;
+    vector<Move> moves = generate_moves(current, my_turn);
+    if (moves.empty()) return quality(current);
+    
+
+    int best_quality = my_turn ? -1e9 : 1e9;
+    for (Move tmp : moves){
+        int nxt_quality = simulator(tmp.nxt_state, tick + 1, root_tick);
+        if (my_turn) {
+            if (maximize(best_quality, nxt_quality) && tick == root_tick)
+                chosen_move = tmp.move;
+        }
+        else {
+            if (minimize(best_quality, nxt_quality) && tick == root_tick)
+                chosen_move = tmp.move;
+        }
+    }
+    return best_quality;
 }
 
 ////Call_functions----------------------------------------------------------------------------------------
@@ -191,10 +229,17 @@ signed main(){
 
 //Load Input----------------------------------------------------------------------------------------
     int number_table = 1;
-    //cin >> numbertable;
-    fu(i, 1, number_table) Load_input();
+    //cin >> numbertable; fu(i, 1, number_table) Load_input();
+    State current = Load_input();
     pre_hash_table();
-
-    generate_moves(current);
     
+    fu(tick, 1, number_step){
+        chosen_move = -1;
+        simulator(current, tick, tick);
+        bool my_turn = tick & 1;
+        current = apply_move(current, chosen_move, my_turn);
+        if (my_turn) cout << "my move: " << command[chosen_move] << endl;
+        else cout << "enemy move: " << command[chosen_move] << endl;
+    }
+    cout << current.my_score << " " << current.enemy_score << endl;
 }
