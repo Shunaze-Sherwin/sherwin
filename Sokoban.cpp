@@ -144,7 +144,6 @@ State apply_move(State current, int direction, bool my_turn){
 ll code[17][17];
 
 void pre_hash_table(){
-    int cnt = 0;
     fu(i, 1, 16) fu(j, 1, 16) code[i][j] = Rand(0, 1e14);
 }
 
@@ -174,7 +173,6 @@ vector<Move> generate_moves(const State &current, bool my_turn){
     vector<Move> res;
     fu(move, 0, 3){
         State next = apply_move(current, move, my_turn);
-        if (hash_table(next) == hash_table(current)) continue;
         res.push_back({move, next});
     }
     return res;
@@ -184,27 +182,34 @@ int quality(const State& current){
     return current.my_score - current.enemy_score;
 }
 
-int number_step = 10;
-int chosen_move = -1;
+bool check(const State &current, int my_move, int enemy_move){
+    State a = apply_move(current, my_move, true);
+    a = apply_move(a, enemy_move, false);
+    State b = apply_move(current, enemy_move, false);
+    b = apply_move(b, my_move, true);
+    return hash_table(a) != hash_table(b);
+}
+
+int number_tick = 10;
+pair<int, int> chosen_move = {-1, -1};
 
 int simulator(State &current, int tick, int root_tick){
-    if (tick > number_step) return quality(current);
-    bool my_turn  = tick & 1;
-    vector<Move> moves = generate_moves(current, my_turn);
-    if (moves.empty()) return quality(current);
-    
+    if (tick > number_tick) return quality(current);
+    vector<Move> me = generate_moves(current, 1);
+    if (me.empty()) return quality(current);
 
-    int best_quality = my_turn ? -1e9 : 1e9;
-    for (Move tmp : moves){
-        int nxt_quality = simulator(tmp.nxt_state, tick + 1, root_tick);
-        if (my_turn) {
-            if (maximize(best_quality, nxt_quality) && tick == root_tick)
-                chosen_move = tmp.move;
+    int best_quality = -1e9;
+    for (Move after_me : me){
+        vector<Move> enemy = generate_moves(after_me.nxt_state, 0);
+        pair<int, int> carry;
+        carry.first = after_me.move;
+        int tmp = 1e9;
+        for (Move after_enemy : enemy){
+            int nxt_quality = simulator(after_enemy.nxt_state, tick + 2, root_tick);
+            if (minimize(tmp, nxt_quality)) carry.second = after_enemy.move;
         }
-        else {
-            if (minimize(best_quality, nxt_quality) && tick == root_tick)
-                chosen_move = tmp.move;
-        }
+        if (maximize(best_quality, tmp) && tick == root_tick)
+            chosen_move = carry;
     }
     return best_quality;
 }
@@ -232,14 +237,14 @@ signed main(){
     //cin >> numbertable; fu(i, 1, number_table) Load_input();
     State current = Load_input();
     pre_hash_table();
-    
-    fu(tick, 1, number_step){
-        chosen_move = -1;
+
+    for (int tick = 1; tick < number_tick; tick += 2){
+        chosen_move = {-1, -1};
         simulator(current, tick, tick);
-        bool my_turn = tick & 1;
-        current = apply_move(current, chosen_move, my_turn);
-        if (my_turn) cout << "my move: " << command[chosen_move] << endl;
-        else cout << "enemy move: " << command[chosen_move] << endl;
+        current = apply_move(current, chosen_move.first, 1);
+        current = apply_move(current, chosen_move.second, 0);
+        cout << "my move: " << command[chosen_move.first] << '\n';
+        cout << "enemy move: " << command[chosen_move.second] << '\n';
     }
     cout << current.my_score << " " << current.enemy_score << endl;
 }
