@@ -1,5 +1,4 @@
 #include "common.h"
-#include "calculate_distance.h"
 #include "simulator.h"
 
 signed main(){

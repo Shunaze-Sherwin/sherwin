@@ -1,10 +1,11 @@
 #pragma once
 #include "common.h"
+#include "quality.h"
 
 //Aplly move-----------------------------------------------------------------------------------------------
-bool find_box(const State &current, int x, int y){
-    for (pair<int, int> tmp : current.box) if (tmp == make_pair(x, y)) return true;
-    return false;
+int find_box(const State &current, int x, int y){
+    fu(i, 0, (int)current.box.size() - 1) if (current.box[i] == make_pair(x, y)) return i;
+    return -1;
 }
 
 State apply_move(State current, int direction, bool my_turn){
@@ -22,24 +23,21 @@ State apply_move(State current, int direction, bool my_turn){
         else current.enemy = {x, y};
         return current;
     }
+    int pos = find_box(current, x, y);
+    if (pos == -1) return current;
 
-    for (int i = 0; i < current.box.size(); ++i){
-        if (current.box[i] == make_pair(x, y)){
-            int new_x = x + dx[direction];
-            int new_y = y + dy[direction];
-            int type = current.get(new_x, new_y);
-            if (!type) return current;
-            current.update(x, y, 1);
-            if (type == 2 || type == -2) current.box.erase(current.box.begin() + i);
-            else current.box[i] = {new_x, new_y}, current.update(new_x, new_y, 0);
-            if (type == 2) ++current.my_score;
-            if (type == -2) ++current.enemy_score;
+    int new_x = x + dx[direction];
+    int new_y = y + dy[direction];
+    int type = current.get(new_x, new_y);
+    if (!type) return current;
+    current.update(x, y, 1);
+    if (type == 2 || type == -2) current.box.erase(current.box.begin() + pos);
+    else current.box[pos] = {new_x, new_y}, current.update(new_x, new_y, 0);
+    if (type == 2) ++current.my_score;
+    if (type == -2) ++current.enemy_score;
+    if (my_turn) current.me = {x, y};
+    else current.enemy = {x, y}; 
 
-            if (my_turn) current.me = {x, y};
-            else current.enemy = {x, y}; 
-            break;
-        }
-    }
     return current;
 }
 
@@ -56,10 +54,6 @@ vector<Move> generate_moves(const State &current, bool my_turn){
         res.push_back({move, next});
     }
     return res;
-}
-
-int quality(const State& current){
-    return current.my_score - current.enemy_score;
 }
 
 bool check(const State &current, int my_move, int enemy_move){

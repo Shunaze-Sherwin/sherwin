@@ -1,2 +1,11 @@
-5 6
-1
+my move: R
+enemy move: L
+my move: R
+enemy move: U
+my move: L
+enemy move: L
+my move: D
+enemy move: U
+my move: R
+enemy move: U
+2 1
