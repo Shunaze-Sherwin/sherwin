@@ -16,7 +16,7 @@ ll Rand(ll l, ll r){
 //Load Input----------------------------------------------------------------------------------------
 int target[17][17];
 struct State{
-    array<unsigned long long, 4> table;
+    array<unsigned long long, 4> table{};
     pair<int, int> me;
     pair<int, int> enemy;
     vector<pair<int, int>> box;
@@ -30,7 +30,7 @@ struct State{
         else table[x] &= ~(1ull << y);
     }
 
-    int get(int x, int y){
+    int get(int x, int y) const{
         if (x < 1 || x > 16 || y < 1 || y > 16) return 0;
         if (x == enemy.first && y == enemy.second) return 0;
 
@@ -87,8 +87,9 @@ array<array<int, 17>, 17> bfs(pair<int, int> start, const State &a){
     return cost;
 }
 
-int dist(pair<int, int> start, pair<int, int> target){
-    return 0;
+int dist(pair<int, int> start, pair<int, int> target, const State &a){
+    array<array<int, 17>, 17> cost = bfs(start, a);
+    return cost[target.first][target.second];
 }
 
 //Aplly move-----------------------------------------------------------------------------------------------
@@ -97,12 +98,19 @@ bool find_box(const State &a, int x, int y){
     return false;
 }
 
-State apply_move(State current, int direction){
-    int x = current.me.first + dx[direction];
-    int y = current.me.second + dy[direction];
+State apply_move(State current, int direction, bool my_turn){
+    int x, y;
+    if (my_turn) {
+        x = current.me.first + dx[direction];
+        y = current.me.second + dy[direction];
+    } else {
+        x = current.enemy.first + dx[direction];
+        y = current.enemy.second + dy[direction];
+    }
 
     if (current.get(x, y) == 1) {
-        current.me = {x, y};
+        if (my_turn) current.me = {x, y};
+        else current.enemy = {x, y};
         return current;
     }
 
@@ -117,7 +125,9 @@ State apply_move(State current, int direction){
             else current.box[i] = {new_x, new_y}, current.update(new_x, new_y, 0);
             if (type == 2) ++current.my_score;
             if (type == -2) ++current.enemy_score;
-            current.me = {x, y};
+
+            if (my_turn) current.me = {x, y};
+            else current.enemy = {x, y}; 
             break;
         }
     }
@@ -148,6 +158,19 @@ array<ll, 4> hash_table(State current){
     return res;
 }
 
+//Generate all possible moves-----------------------------------------------------------------------------------------------
+void generate_moves(const State &a){
+    fu(my_turn, 0, 3) fu(enemy_turn, 0, 3){
+        State a = apply_move(current, my_turn, true);
+        a = apply_move(a, enemy_turn, false);
+
+        State b = apply_move(current, enemy_turn, false);
+        b = apply_move(b, my_turn, true);
+        if (hash_table(a) != hash_table(b)) continue;
+        cout << command[my_turn] << " " << command[enemy_turn] << '\n';
+    }
+}
+
 ////Call_functions----------------------------------------------------------------------------------------
 signed main(){
     #define name "history"
@@ -172,8 +195,6 @@ signed main(){
     fu(i, 1, number_table) Load_input();
     pre_hash_table();
 
-    map<array<ll, 4>, int> visted;
-    queue<pair<State, int>> qu;
-    qu.push({current, 0});
-    visted[hash_table(current)] = 0;
+    generate_moves(current);
+    
 }
