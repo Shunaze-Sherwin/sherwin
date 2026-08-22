@@ -1,36 +1,46 @@
 #include "common.h"
 #include "simulator.h"
+#include "qlearning.h"
 
-signed main(){
+signed main(int argc, char **argv){
+    bool interactive = argc > 1 && string(argv[1]) == "--interactive";
+    if (!interactive) {
     #define name "history"
     if (fopen(name".INP", "r")){
         freopen(name".INP", "r", stdin);
         freopen(name".OUT", "w", stdout);
     }
+    }
     #undef name
 
-    #define name "current_test"
-    if (fopen(name".INP", "r")){
-        freopen(name".INP", "r", stdin);
-        freopen(name".OUT", "w", stdout);
+    if (!interactive) {
+        #define name "current_test"
+        if (fopen(name".INP", "r")){
+            freopen(name".INP", "r", stdin);
+            freopen(name".OUT", "w", stdout);
+        }
+        #undef name
     }
 
     ios_base::sync_with_stdio(false);
     cin.tie(nullptr); cout.tie(nullptr);
+    load_q_table();
 
 //Load Input----------------------------------------------------------------------------------------
     //int number_table = 1; cin >> numbertable; fu(i, 1, number_table) Load_input();
-    State current = Load_input();
-    pre_hash_table();
-    init_quality(current);
-//Simulator-----------------------------------------------------------------------------------------
-    for (int tick = 1; tick < number_tick; tick += 2){
-        chosen_move = {-1, -1};
-        simulator(current, tick, tick);
-        current = apply_move(current, chosen_move.first, 1);
-        current = apply_move(current, chosen_move.second, 0);
-        cout << "my move: " << command[chosen_move.first] << '\n';
-        cout << "enemy move: " << command[chosen_move.second] << '\n';
+    while (true){
+        State current;
+        if (!Load_input(current)) break;
+        learn_state(current);
+        pre_hash_table();
+        init_quality(current);
+        simulator(current, 1, 1);
+        chosen_move.first = learned_action(current, chosen_move.first);
+        if (chosen_move.first == -1) cout << "S\n";
+        else cout << command[chosen_move.first] << '\n';
+        cout.flush();
+        if (chosen_move.first != -1) remember_action(current, chosen_move.first);
+        if (!interactive) break;
     }
-    cout << current.my_score << " " << current.enemy_score << endl;
+    save_q_table();
 }

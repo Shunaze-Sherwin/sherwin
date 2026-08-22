@@ -56,10 +56,11 @@ struct State{
     // -2: enemy's point
 };
 
-State Load_input(){
-    State res;
+bool Load_input(State &res){
+    res = State{};
     fu(i, 1, 16) fu(j, 1, 16) {
-        char c; cin >> c;
+        char c;
+        if (!(cin >> c)) return false;
         if (c == 'a') res.me = {i, j};
         if (c == 'b') res.enemy = {i, j};
         if (c == 'A') target[i][j] = 1;
@@ -68,7 +69,18 @@ State Load_input(){
         if (c == '#') wall[i][j] = 1;
         if (c != '#' && c != 'X' && c != 'A' && c != 'B') res.update(i, j, 1);
     }
-    return res;
+    int my_score, enemy_score;
+    if (cin >> my_score >> enemy_score){
+        res.my_score = my_score;
+        res.enemy_score = enemy_score;
+    }
+    return true;
+}
+
+State Load_input(){
+    State result;
+    Load_input(result);
+    return result;
 }
 
 bool is_wall(int x, int y){

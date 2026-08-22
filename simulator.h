@@ -62,7 +62,8 @@ bool check(const State &current, int my_move, int enemy_move){
 int number_tick = 10;
 pair<int, int> chosen_move = {-1, -1};
 
-ll simulator(const State &current, int tick, int root_tick){
+ll simulator(const State &current, int tick, int root_tick,
+             ll alpha = -1e18, ll beta = 1e18){
     if (tick > number_tick) return quality(current);
     vector<Move> me = generate_moves(current, 1);
     vector<Move> enemy = generate_moves(current, 0);
@@ -75,10 +76,14 @@ ll simulator(const State &current, int tick, int root_tick){
         ll tmp = 1e18;
         for (Move after_enemy : enemy) if (check(current, after_me.move, after_enemy.move)){
             State next_2turn = apply_move(after_me.nxt_state, after_enemy.move, 0);
-            ll nxt_quality = simulator(next_2turn, tick + 2, root_tick);
+            ll nxt_quality = simulator(next_2turn, tick + 2, root_tick,
+                                       alpha, beta);
             if (minimize(tmp, nxt_quality)) carry.second = after_enemy.move;
+            if (tmp <= alpha) break;
         }
         if (tmp != 1e18 && maximize(best_quality, tmp) && tick == root_tick) chosen_move = carry;
+        maximize(alpha, best_quality);
+        if (best_quality >= beta) break;
     }
     return best_quality;
 }

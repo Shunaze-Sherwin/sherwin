@@ -4,6 +4,22 @@
 
 int goal_dist[2][17][17];
 
+struct QualityWeights {
+    ll score = 100000;
+    ll goal = 100;
+    ll push = 25;
+    ll dead_corner = 5000;
+};
+
+QualityWeights quality_weights;
+
+void load_quality_weights(){
+    ifstream input("weights.dat");
+    if (!(input >> quality_weights.score >> quality_weights.goal
+                >> quality_weights.push >> quality_weights.dead_corner))
+        quality_weights = QualityWeights{};
+}
+
 bool static_free(const State &board, int x, int y){
     if (make_pair(x, y) == board.me || make_pair(x, y) == board.enemy) return true;
     if (find_box(board, x, y) != -1) return true;
@@ -11,6 +27,7 @@ bool static_free(const State &board, int x, int y){
 }
 
 void init_quality(const State &board){
+    load_quality_weights();
     fu(type, 0, 1) fu(i, 1, 16) fu(j, 1, 16) goal_dist[type][i][j] = 1e9;
 
     fu(type, 0, 1){
@@ -43,12 +60,37 @@ bool is_dead_corner(const State &, pair<int, int> pos){
     return vertical && horizontal;
 }
 
+int distance_to_push(const State &current, pair<int, int> box, bool mine){
+    int best = 1e9;
+    int box_goal = goal_dist[mine ? 0 : 1][box.first][box.second];
+    if (box_goal >= 1e9) return best;
+
+    fu(direction, 0, 3){
+        int next_x = box.first + dx[direction];
+        int next_y = box.second + dy[direction];
+        int stand_x = box.first - dx[direction];
+        int stand_y = box.second - dy[direction];
+        if (next_x < 1 || next_x > 16 || next_y < 1 || next_y > 16 ||
+            stand_x < 1 || stand_x > 16 || stand_y < 1 || stand_y > 16)
+            continue;
+        if (goal_dist[mine ? 0 : 1][next_x][next_y] != box_goal - 1)
+            continue;
+        if (current.get(stand_x, stand_y) != 1 &&
+            (mine ? current.me : current.enemy) != make_pair(stand_x, stand_y))
+            continue;
+        auto position = mine ? current.me : current.enemy;
+        minimize(best, abs(position.first - stand_x) +
+                       abs(position.second - stand_y));
+    }
+    return best;
+}
+
 ll quality(const State& current){
-    ll res = 100000 * (current.my_score - current.enemy_score);
+    ll res = quality_weights.score * (current.my_score - current.enemy_score);
     for (const pair<int, int> &box : current.box){
         int my_goal = goal_dist[0][box.first][box.second];
         int enemy_goal = goal_dist[1][box.first][box.second];
-        res += 100ll * (enemy_goal - my_goal);
+        res += quality_weights.goal * (enemy_goal - my_goal);
 
         int my_pushes = 0;
         int enemy_pushes = 0;
@@ -64,8 +106,12 @@ ll quality(const State& current){
                 if (enemy_distance <= 16) ++enemy_pushes;
             }
         }
-        res += 25ll * (my_pushes - enemy_pushes);
-        if (is_dead_corner(current, box)) res -= 5000;
+        res += quality_weights.push * (my_pushes - enemy_pushes);
+        int my_push_distance = distance_to_push(current, box, true);
+        int enemy_push_distance = distance_to_push(current, box, false);
+        if (my_push_distance < 1e9) res -= my_push_distance;
+        if (enemy_push_distance < 1e9) res += enemy_push_distance;
+        if (is_dead_corner(current, box)) res -= quality_weights.dead_corner;
     }
     return res;
 }
