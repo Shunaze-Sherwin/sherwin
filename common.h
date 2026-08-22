@@ -58,6 +58,8 @@ struct State{
 
 bool Load_input(State &res){
     res = State{};
+    memset(target, 0, sizeof(target));
+    memset(wall, 0, sizeof(wall));
     fu(i, 1, 16) fu(j, 1, 16) {
         char c;
         if (!(cin >> c)) return false;

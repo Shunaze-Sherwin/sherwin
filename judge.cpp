@@ -40,6 +40,47 @@ Board read_board(const string &file_name) {
     return board;
 }
 
+Board generate_board(const Board &layout, mt19937 &rng) {
+    Board board = layout;
+    vector<pair<int, int>> free_cells;
+    vector<pair<pair<int, int>, char>> goals;
+
+    for (int row = 0; row < SIZE; ++row) {
+        for (int column = 0; column < SIZE; ++column) {
+            char &cell = board.cell[row][column];
+            if (cell == '#') continue;
+            bool is_goal_cell = cell == 'A' || cell == 'B';
+            if (is_goal_cell)
+                goals.push_back({{row, column}, cell});
+            else
+                free_cells.push_back({row, column});
+            cell = '.';
+        }
+    }
+
+    shuffle(free_cells.begin(), free_cells.end(), rng);
+    size_t next = 0;
+    board.me = free_cells[next++];
+    do {
+        board.enemy = free_cells[next++];
+    } while (board.enemy == board.me);
+
+    for (const auto &goal : goals)
+        board.cell[goal.first.first][goal.first.second] = goal.second;
+
+    board.my_score = 0;
+    board.enemy_score = 0;
+    int boxes = static_cast<int>(goals.size());
+    while (boxes > 0 && next < free_cells.size()) {
+        auto box = free_cells[next++];
+        if (box == board.me || box == board.enemy || board.cell[box.first][box.second] != '.')
+            continue;
+        board.cell[box.first][box.second] = 'X';
+        --boxes;
+    }
+    return board;
+}
+
 void write_board(const Board &board, const string &file_name) {
     ofstream output(file_name);
     for (int row = 0; row < SIZE; ++row) {
@@ -243,7 +284,7 @@ int main(int argc, char **argv) {
     int wins = 0;
 
     for (int game = 0; game < games; ++game) {
-        Board board = initial;
+        Board board = generate_board(initial, rng);
         for (int tick = 0; tick < ticks; ++tick) {
             if (human) {
                 cerr << "\nGame " << game + 1 << ", tick " << tick + 1 << '\n';

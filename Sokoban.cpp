@@ -34,6 +34,7 @@ signed main(int argc, char **argv){
         learn_state(current);
         pre_hash_table();
         init_quality(current);
+        chosen_move = {-1, -1};
         simulator(current, 1, 1);
         chosen_move.first = learned_action(current, chosen_move.first);
         if (chosen_move.first == -1) cout << "S\n";

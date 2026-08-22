@@ -48,6 +48,9 @@ void save_q_table() {
 
 void learn_state(const State &current) {
     unsigned long long key = state_key(current);
+    if (has_previous_action &&
+        (current.my_score < previous_score || current.enemy_score < previous_enemy_score))
+        has_previous_action = false;
     if (has_previous_action) {
         double reward = ((current.my_score - current.enemy_score) -
                  (previous_score - previous_enemy_score)) * 1000.0;
@@ -76,7 +79,17 @@ void remember_action(const State &current, int action) {
 
 int learned_action(const State &current, int fallback) {
     QEntry &entry = q_table[state_key(current)];
-    if (entry.visits < 3) return fallback;
+    // FIX: 96.6% cac trang thai dat visits>=3 trong qtable.dat hien tai van
+    // co CA 4 gia tri Q = 0 (chua he hoc duoc gi cho trang thai do - chi la
+    // "ghe qua" nhieu lan ma chua bao gio nhan duoc thuong khac 0 de cap
+    // nhat). Neu chi xet visits>=3 nhu truoc, ham nay se "tin" vao 4 so 0
+    // bang nhau va CHON LIEU 1 huong (theo thu tu R,L,D,U) - co the ghi de
+    // mot nuoc minimax tot bang 1 nuoc chua hoc gi ca. Them dieu kien: phai
+    // co it nhat 1 gia tri Q khac 0 thi moi coi la "da hoc" va dung de ghi
+    // de fallback.
+    bool has_signal = false;
+    for (double v : entry.value) if (v != 0.0) { has_signal = true; break; }
+    if (entry.visits < 3 || !has_signal) return fallback;
     int best_action = fallback;
     double best_value = -numeric_limits<double>::infinity();
     fu(action, 0, 3) {
