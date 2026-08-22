@@ -23,6 +23,7 @@ int dy[] = {1, -1, 0, 0};
 
 //State---------------------------------------------------------------------------------------
 int target[17][17];
+bool wall[17][17];
 struct State{
     array<unsigned long long, 4> table{};
     pair<int, int> me;
@@ -64,9 +65,20 @@ State Load_input(){
         if (c == 'A') target[i][j] = 1;
         if (c == 'B') target[i][j] = -1;
         if (c == 'X') res.box.push_back({i, j});
+        if (c == '#') wall[i][j] = 1;
         if (c != '#' && c != 'X' && c != 'A' && c != 'B') res.update(i, j, 1);
     }
     return res;
+}
+
+bool is_wall(int x, int y){
+    if (x < 1 || y < 1 || x > 16 || y > 16) return true;
+    return wall[x][y];
+}
+
+int find_box(const State &current, int x, int y){
+    fu(i, 0, (int)current.box.size() - 1) if (current.box[i] == make_pair(x, y)) return i;
+    return -1;
 }
 
 //Hash State---------------------------------------------------------------------------------

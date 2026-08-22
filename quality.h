@@ -6,7 +6,8 @@ int goal_dist[2][17][17];
 
 bool static_free(const State &board, int x, int y){
     if (make_pair(x, y) == board.me || make_pair(x, y) == board.enemy) return true;
-    return board.get(x, y);
+    if (find_box(board, x, y) != -1) return true;
+    return board.get(x, y) == 1;
 }
 
 void init_quality(const State &board){
@@ -25,7 +26,9 @@ void init_quality(const State &board){
             fu(direction, 0, 3){
                 int x = tmp.first - dx[direction];
                 int y = tmp.second - dy[direction];
-                if (!static_free(board, x, y) || goal_dist[type][x][y] != 1e9) continue;
+                int stand_x = x - dx[direction];
+                int stand_y = y - dy[direction];
+                if (!static_free(board, x, y) || !static_free(board, stand_x, stand_y) || goal_dist[type][x][y] != 1e9) continue;
                 goal_dist[type][x][y] = goal_dist[type][tmp.first][tmp.second] + 1;
                 qu.push({x, y});
             }
@@ -33,21 +36,19 @@ void init_quality(const State &board){
     }
 }
 
-bool is_dead_corner(const State &current, pair<int, int> pos){
+bool is_dead_corner(const State &, pair<int, int> pos){
     if (target[pos.first][pos.second] != 0) return false;
-    bool vertical = current.get(pos.first - 1, pos.second) == 0 ||
-                    current.get(pos.first + 1, pos.second) == 0;
-    bool horizontal = current.get(pos.first, pos.second - 1) == 0 ||
-                      current.get(pos.first, pos.second + 1) == 0;
+    bool vertical = is_wall(pos.first - 1, pos.second) || is_wall(pos.first + 1, pos.second);
+    bool horizontal = is_wall(pos.first, pos.second - 1) || is_wall(pos.first, pos.second + 1);
     return vertical && horizontal;
 }
 
-int quality(const State& current){
-    int result = 100000 * (current.my_score - current.enemy_score);
+ll quality(const State& current){
+    ll res = 100000 * (current.my_score - current.enemy_score);
     for (const pair<int, int> &box : current.box){
         int my_goal = goal_dist[0][box.first][box.second];
         int enemy_goal = goal_dist[1][box.first][box.second];
-        result += 100 * (enemy_goal - my_goal);
+        res += 100ll * (enemy_goal - my_goal);
 
         int my_pushes = 0;
         int enemy_pushes = 0;
@@ -63,8 +64,8 @@ int quality(const State& current){
                 if (enemy_distance <= 16) ++enemy_pushes;
             }
         }
-        result += 25 * (my_pushes - enemy_pushes);
-        if (is_dead_corner(current, box)) result -= 5000;
+        res += 25ll * (my_pushes - enemy_pushes);
+        if (is_dead_corner(current, box)) res -= 5000;
     }
-    return result;
+    return res;
 }

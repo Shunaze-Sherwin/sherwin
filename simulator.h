@@ -3,11 +3,6 @@
 #include "quality.h"
 
 //Aplly move-----------------------------------------------------------------------------------------------
-int find_box(const State &current, int x, int y){
-    fu(i, 0, (int)current.box.size() - 1) if (current.box[i] == make_pair(x, y)) return i;
-    return -1;
-}
-
 State apply_move(State current, int direction, bool my_turn){
     int x, y;
     if (my_turn) {
@@ -67,23 +62,23 @@ bool check(const State &current, int my_move, int enemy_move){
 int number_tick = 10;
 pair<int, int> chosen_move = {-1, -1};
 
-int simulator(const State &current, int tick, int root_tick){
+ll simulator(const State &current, int tick, int root_tick){
     if (tick > number_tick) return quality(current);
     vector<Move> me = generate_moves(current, 1);
     vector<Move> enemy = generate_moves(current, 0);
     if (me.empty() && enemy.empty()) return quality(current);
 
-    int best_quality = -1e9;
+    ll best_quality = -1e18;
     for (Move after_me : me){
         pair<int, int> carry;
         carry.first = after_me.move;
-        int tmp = 1e9;
+        ll tmp = 1e18;
         for (Move after_enemy : enemy) if (check(current, after_me.move, after_enemy.move)){
             State next_2turn = apply_move(after_me.nxt_state, after_enemy.move, 0);
-            int nxt_quality = simulator(next_2turn, tick + 2, root_tick);
+            ll nxt_quality = simulator(next_2turn, tick + 2, root_tick);
             if (minimize(tmp, nxt_quality)) carry.second = after_enemy.move;
         }
-        if (tmp != 1e9 && maximize(best_quality, tmp) && tick == root_tick) chosen_move = carry;
+        if (tmp != 1e18 && maximize(best_quality, tmp) && tick == root_tick) chosen_move = carry;
     }
     return best_quality;
 }

@@ -19,8 +19,7 @@ signed main(){
     cin.tie(nullptr); cout.tie(nullptr);
 
 //Load Input----------------------------------------------------------------------------------------
-    int number_table = 1;
-    //cin >> numbertable; fu(i, 1, number_table) Load_input();
+    //int number_table = 1; cin >> numbertable; fu(i, 1, number_table) Load_input();
     State current = Load_input();
     pre_hash_table();
     init_quality(current);

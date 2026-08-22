@@ -24,8 +24,3 @@ array<array<int, 17>, 17> bfs(pair<int, int> start, const State &current){
     }
     return cost;
 }
-
-int dist(pair<int, int> start, pair<int, int> target, const State &current){
-    array<array<int, 17>, 17> cost = bfs(start, current);
-    return cost[target.first][target.second];
-}
