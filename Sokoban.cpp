@@ -25,7 +25,6 @@ signed main(){
     State current = Load_input();
     pre_hash_table();
 //Simulator-----------------------------------------------------------------------------------------
-
     for (int tick = 1; tick < number_tick; tick += 2){
         chosen_move = {-1, -1};
         simulator(current, tick, tick);
