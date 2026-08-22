@@ -44,7 +44,6 @@ State apply_move(State current, int direction, bool my_turn){
 }
 
 //Simulate--------------------------------------------------------------------------------------------------
-
 struct Move{
     int move;
     State nxt_state;
