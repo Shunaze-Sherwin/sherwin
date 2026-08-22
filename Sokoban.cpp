@@ -23,6 +23,7 @@ signed main(){
     //cin >> numbertable; fu(i, 1, number_table) Load_input();
     State current = Load_input();
     pre_hash_table();
+    init_quality(current);
 //Simulator-----------------------------------------------------------------------------------------
     for (int tick = 1; tick < number_tick; tick += 2){
         chosen_move = {-1, -1};

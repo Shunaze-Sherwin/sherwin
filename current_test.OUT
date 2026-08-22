@@ -1,11 +1,11 @@
 my move: R
-enemy move: L
+enemy move: R
 my move: R
-enemy move: U
+enemy move: R
 my move: L
 enemy move: L
 my move: D
-enemy move: U
+enemy move: L
 my move: R
-enemy move: U
+enemy move: L
 2 1
