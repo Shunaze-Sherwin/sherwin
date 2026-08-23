@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p /tmp/claude-1000/-workspaces-sherwin/272cb6af-dc0f-4f95-8ba8-63b2ef5be61e/scratchpad)",
+      "Bash(g++ -std=c++17 -O2 -Wall -o /tmp/claude-1000/-workspaces-sherwin/272cb6af-dc0f-4f95-8ba8-63b2ef5be61e/scratchpad/bot_greedy_test \"greedy bot/bot_greedy.cpp\")",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(python3 -)",
+      "Bash(./bot_greedy_test --interactive)",
+      "Bash(g++ -std=c++17 -O2 -o greedy_bot \"greedy bot/bot_greedy.cpp\")",
+      "Bash(./judge greedy_bot 10 40)",
+      "Bash(./judge greedy_bot greedy_bot 10 250)",
+      "Bash(g++ -std=c++17 -O2 -Wall -o judge judge.cpp)",
+      "Bash(./judge greedy_bot greedy_bot 20 250)",
+      "Bash(./judge Sokoban Sokoban 10 100)",
+      "Bash(echo \"build exit: $?\")"
+    ]
+  }
+}

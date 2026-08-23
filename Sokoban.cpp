@@ -5,11 +5,11 @@
 signed main(int argc, char **argv){
     bool interactive = argc > 1 && string(argv[1]) == "--interactive";
     if (!interactive) {
-    #define name "history"
-    if (fopen(name".INP", "r")){
-        freopen(name".INP", "r", stdin);
-        freopen(name".OUT", "w", stdout);
-    }
+        #define name "history"
+        if (fopen(name".INP", "r")){
+            freopen(name".INP", "r", stdin);
+            freopen(name".OUT", "w", stdout);
+        }
     }
     #undef name
 
@@ -28,12 +28,27 @@ signed main(int argc, char **argv){
 
 //Load Input----------------------------------------------------------------------------------------
     //int number_table = 1; cin >> numbertable; fu(i, 1, number_table) Load_input();
+    pair<int, int> expected_position = {-1, -1};
+    bool has_expected_position = false;
+    int blocked_streak = 0;
     while (true){
         State current;
         if (!Load_input(current)) break;
         pre_hash_table();
         init_quality(current);
         learn_state(current);
+
+        // Nước tick trước có thực sự làm mình di chuyển như kỳ vọng không? Nếu không (bị judge
+        // huỷ do tranh ô/hộp với đối thủ), báo cho simulator() qua blocked_move để nó phạt việc
+        // lặp lại đúng nước vừa thất bại - xem giải thích chi tiết cạnh blocked_move/
+        // blocked_penalty trong simulator.h. Phạt NHÂN DẦN theo số tick liên tiếp bị huỷ (reset
+        // về 0 ngay khi có 1 nước thành công) để chắc chắn cuối cùng vượt qua mọi chênh lệch
+        // approach/goal/push khiến bot cứ chọn lại đúng nước đã chứng minh thất bại.
+        bool was_blocked = has_expected_position && current.me != expected_position;
+        blocked_streak = was_blocked ? blocked_streak + 1 : 0;
+        blocked_move = was_blocked ? last_move : -1;
+        blocked_penalty = 300LL * blocked_streak;
+
         chosen_move = {-1, -1};
         search_deadline = chrono::steady_clock::now() + SEARCH_TIME_BUDGET;
         simulator(current, 1, 1);
@@ -42,6 +57,13 @@ signed main(int argc, char **argv){
         else cout << command[chosen_move.first] << '\n';
         cout.flush();
         last_move = chosen_move.first;
+        if (chosen_move.first != -1) {
+            expected_position = {current.me.first + dx[chosen_move.first],
+                                  current.me.second + dy[chosen_move.first]};
+            has_expected_position = true;
+        } else {
+            has_expected_position = false;
+        }
         if (chosen_move.first != -1) remember_action(current, chosen_move.first);
         if (!interactive) break;
     }

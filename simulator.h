@@ -44,9 +44,11 @@ struct Move{
 
 vector<Move> generate_moves(const State &current, bool my_turn){
     vector<Move> res;
+    res.reserve(4);
+    array<ll, 4> current_hash = hash_table(current);
     fu(move, 0, 3){
         State next = apply_move(current, move, my_turn);
-        if (hash_table(next) != hash_table(current))
+        if (hash_table(next) != current_hash)
             res.push_back({move, next});
     }
     return res;
@@ -160,6 +162,25 @@ bool is_reverse_move(int a, int b) {
            (a == 2 && b == 3) || (a == 3 && b == 2);
 }
 
+// Nước ĐÃ THỬ ở tick THẬT ngay trước nhưng KHÔNG làm vị trí mình đổi như kỳ vọng - tức đã bị
+// judge huỷ do tranh ô/hộp với đối thủ (xem apply_both_moves). Khác last_move (nước đã đi,
+// có thể thành công hay không): blocked_move chỉ khác -1 khi ta có BẰNG CHỨNG THẬT là nước đó
+// vừa thất bại. Cần tín hiệu riêng vì minimax tính lại từ đầu mỗi tick, không có trí nhớ - nếu
+// đối thủ (không thực sự chơi đối kháng, chỉ tham lam độc lập) tình cờ luôn tranh đúng ô đó,
+// "bị huỷ = an toàn" có thể được đánh giá ngang các hướng khác trong kịch bản xấu nhất, khiến
+// bot chọn lại đúng nước đó mãi mãi dù chưa từng thành công - đã đo thực tế: bot kẹt cứng
+// 188/200 tick vì lý do này dù mô hình xung đột đã đúng.
+int blocked_move = -1;
+
+// Mức phạt cho blocked_move - PHẢI tăng dần theo số lần liên tiếp bị huỷ (Sokoban.cpp nhân
+// dần giá trị này), không phải hằng số cố định như REVERSAL_PENALTY. Đã đo thực tế: phạt cố
+// định 10 (bằng REVERSAL_PENALTY, vốn chỉ để phá HÒA TUYỆT ĐỐI) không đủ lớn so với chênh lệch
+// hàng chục/hàng trăm điểm của approach/goal/push trong quality() - bot vẫn chọn lại đúng nước
+// vừa bị huỷ, kẹt >150/200 tick. Tăng dần đảm bảo cuối cùng luôn vượt qua BẤT KỲ chênh lệch cố
+// định nào, ép bot phải đổi hướng nếu bế tắc kéo dài, mà vẫn không phạt nặng ngay từ lần đầu
+// (có thể chỉ là trùng hợp nhất thời, không phải bế tắc thật).
+ll blocked_penalty = 0;
+
 ll simulator(const State &current, int tick, int root_tick,
              ll alpha = -1e18, ll beta = 1e18){
     if (tick > number_tick || time_is_up()) return quality(current);
@@ -177,6 +198,8 @@ ll simulator(const State &current, int tick, int root_tick,
             ll candidate_quality = quality(after_me.nxt_state);
             if (tick == root_tick && is_reverse_move(after_me.move, last_move))
                 candidate_quality -= REVERSAL_PENALTY;
+            if (tick == root_tick && after_me.move == blocked_move)
+                candidate_quality -= blocked_penalty;
             if (maximize(best_quality, candidate_quality) && tick == root_tick)
                 chosen_move = {after_me.move, -1};
         }
@@ -200,6 +223,8 @@ ll simulator(const State &current, int tick, int root_tick,
             ll candidate_quality = tmp;
             if (tick == root_tick && is_reverse_move(after_me.move, last_move))
                 candidate_quality -= REVERSAL_PENALTY;
+            if (tick == root_tick && after_me.move == blocked_move)
+                candidate_quality -= blocked_penalty;
             if (maximize(best_quality, candidate_quality) && tick == root_tick) chosen_move = carry;
         }
         maximize(alpha, best_quality);
