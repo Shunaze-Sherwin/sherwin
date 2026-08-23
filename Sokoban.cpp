@@ -36,7 +36,7 @@ signed main(int argc, char **argv){
         learn_state(current);
         chosen_move = {-1, -1};
         search_deadline = chrono::steady_clock::now() + SEARCH_TIME_BUDGET;
-        simulator(current, 1, 1);
+        run_search(current);
         chosen_move.first = learned_action(current, chosen_move.first);
         if (chosen_move.first == -1) cout << "S\n";
         else cout << command[chosen_move.first] << '\n';

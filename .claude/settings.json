@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(g++ -O2 -std=c++17 -o Sokoban.exe Sokoban.cpp; \"EXIT=$LASTEXITCODE\")",
+      "PowerShell(g++ -O2 -std=c++17 -o greedy_bot.exe \"greedy bot/bot_greedy.cpp\"; \"EXIT=$LASTEXITCODE\")",
+      "PowerShell(g++ -O2 -std=c++17 -o judge.exe judge.cpp 2>&1 | Select-Object -First 25; \"EXIT=$LASTEXITCODE\")",
+      "PowerShell(g++ -O2 -std=c++17 -o judge.exe judge.cpp bot_process_win.cpp 2>&1 | Select-Object -First 30; \"EXIT=$LASTEXITCODE\")",
+      "PowerShell($sp = \"C:\\\\Users\\\\HOANGD~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Hoang-Dinh-Hai-Vuong-Documents-GitHub-sherwin\\\\fd562059-47e0-4abc-b74d-550671ad8e61\\\\scratchpad\"; Copy-Item qtable.dat \"$sp\\\\qtable.dat.bak\" -Force; Copy-Item weights.dat \"$sp\\\\weights.dat.bak\" -Force; \"backed up\"; git status --short | Out-String)",
+      "PowerShell($ErrorActionPreference='Continue'; .\\\\judge.exe Sokoban greedy_bot 1 3 2>smoke_err.txt | Out-String; \"=== STDERR ===\"; Get-Content smoke_err.txt)",
+      "Bash(rm -f smoke_err.txt)",
+      "Bash(./judge.exe Sokoban greedy_bot 5 200)",
+      "Bash(echo \"JUDGE_EXIT=$?\")",
+      "Bash(awk '{g=$2; t=$4} {last[g]=t} END {for \\(k in last\\) print \"game\",k,\"reached tick\",last[k]}')",
+      "PowerShell(.\\\\judge.exe Sokoban greedy_bot 1 3 2>ps_err.txt 1>ps_out.txt; \"PS_EXIT=$LASTEXITCODE\"; \"--- stderr ---\"; Get-Content ps_err.txt -ErrorAction SilentlyContinue; \"--- stdout lines: $\\(\\(Get-Content ps_out.txt -ErrorAction SilentlyContinue | Measure-Object -Line\\).Lines\\)\")",
+      "Bash(g++ -O0 -g -std=c++17 -o judge_dbg.exe judge.cpp bot_process_win.cpp)",
+      "Bash(echo \"build=$?\")",
+      "Bash(gdb -batch -ex \"run Sokoban greedy_bot 1 3\" -ex \"bt\" --args ./judge_dbg.exe Sokoban greedy_bot 1 3)",
+      "Bash(g++ -O0 -g -std=c++17 -o Sokoban_dbg.exe Sokoban.cpp)",
+      "Bash(gdb -batch -ex \"run --interactive < board_probe.txt\" -ex \"bt 25\" -ex \"info locals\" ./Sokoban_dbg.exe)",
+      "Bash(g++ -O2 -g -std=c++17 -o Sokoban_o2g.exe Sokoban.cpp)",
+      "Bash(gdb -batch -ex \"run --interactive < board_probe.txt\" -ex \"bt 25\" ./Sokoban_o2g.exe)",
+      "Bash(objdump -p Sokoban.exe)",
+      "Bash(g++ -O2 -std=c++17 -static -o Sokoban.exe Sokoban.cpp)",
+      "Bash(g++ -O2 -std=c++17 -static -o greedy_bot.exe \"greedy bot/bot_greedy.cpp\")",
+      "Bash(g++ -O2 -std=c++17 -static -o judge.exe judge.cpp bot_process_win.cpp)",
+      "PowerShell(g++ -O3 -std=c++17 -static -o Sokoban.exe Sokoban.cpp 2>&1; \"SOKOBAN_EXIT=$LASTEXITCODE\")",
+      "PowerShell(Get-Process | Where-Object { $_.ProcessName -match 'judge|Sokoban|greedy' } | Select-Object Id,ProcessName,Path | Format-Table -AutoSize | Out-String)",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"ProcessId=852 or ProcessId=10468\")",
+      "Bash(cat current_test.INP)",
+      "Bash(echo \"0 0\")",
+      "Bash(./Sokoban.exe --interactive)",
+      "Bash(./judge.exe Sokoban greedy_bot 1 5)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(g++ -O0 -g -std=c++17 -fsanitize=address,undefined -o Sokoban_asan.exe Sokoban.cpp)",
+      "Bash(echo \"ASAN_BUILD_EXIT=$?\")"
+    ]
+  }
+}

@@ -1,7 +1,11 @@
 #include <bits/stdc++.h>
+#ifdef _WIN32
+#include "bot_process_win.h"
+#else
 #include <poll.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#endif
 using namespace std;
 
 const int SIZE = 16;
@@ -225,6 +229,42 @@ string serialize_board(const Board &board, bool swapped = false) {
     return output.str();
 }
 
+#ifdef _WIN32
+// Bản Windows: cùng giao diện (send_board/receive_move/move) với bản POSIX bên dưới,
+// chỉ khác phần tạo tiến trình con và chờ dữ liệu, đã tách sang bot_process_win.cpp.
+class BotProcess {
+public:
+    winproc::Handles handles;
+
+    explicit BotProcess(const char *bot) {
+        if (!winproc::spawn(bot, handles))
+            throw runtime_error(string("cannot start bot: ") + bot);
+    }
+
+    ~BotProcess() { winproc::destroy(handles); }
+
+    bool send_board(const Board &board) {
+        return winproc::write_all(handles, serialize_board(board));
+    }
+
+    int receive_move() {
+        string line;
+        if (!winproc::read_line(handles, 2000, line)) return -1;
+        // Giống bản POSIX: lấy ký tự ĐẦU TIÊN giải mã được trong dòng, nên phần '\r'
+        // do stdout của bot chạy ở chế độ text trên Windows sinh ra bị bỏ qua an toàn.
+        for (char value : line) {
+            int direction = decode_command(value);
+            if (direction >= 0) return direction;
+        }
+        return -1;
+    }
+
+    int move(const Board &board, bool swapped = false) {
+        if (!winproc::write_all(handles, serialize_board(board, swapped))) return -1;
+        return receive_move();
+    }
+};
+#else
 class BotProcess {
 public:
     pid_t pid = -1;
@@ -291,6 +331,7 @@ public:
         return receive_move();
     }
 };
+#endif
 
 // Trước đây mỗi ván chỉ nhích goal/push đúng +-1 bất kể thắng đậm hay sát nút, nên tín
 // hiệu từ một ván ăn may/xui vẫn tác động y hệt một ván áp đảo thực sự, dễ dao động qua
