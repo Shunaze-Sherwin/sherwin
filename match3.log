@@ -797,3 +797,11 @@ game 4, tick 193: sent board, bot=L, enemy=R
 game 4, tick 194: sent board, bot=L, enemy=R
 game 4, tick 195: sent board, bot=R, enemy=D
 game 4, tick 196: sent board, bot=R, enemy=L
+game 4, tick 197: sent board, bot=R, enemy=L
+game 4, tick 198: sent board, bot=R, enemy=U
+game 4, tick 199: sent board, bot=R, enemy=L
+game 4, tick 200: sent board, bot=R, enemy=L
+game 4/5: 0-0
+game 5, tick 1: sent board, bot=L, enemy=D
+game 5, tick 2: sent board, bot=L, enemy=R
+game 5, tick 3: sent board, bot=U, enemy=R
