@@ -64,7 +64,13 @@ bool is_dead_corner(const State &, pair<int, int> pos){
     return vertical && horizontal;
 }
 
-int distance_to_push(const State &current, pair<int, int> box, bool mine){
+// Khoảng cách đi bộ THẬT (BFS né tường/hộp/đối thủ) từ vị trí hiện tại tới ô cần đứng để
+// đẩy hộp - trước đây dùng Manhattan distance (đường chim bay), khiến bot bị hút về phía
+// một ô "gần" trên lý thuyết nhưng thực tế bị tường chắn, không có đường đi thật ngắn như
+// vậy. walk_dist là bảng BFS đã tính sẵn 1 lần cho cả lượt gọi quality() (xem bfs() trong
+// calculate_distance.h), truyền vào đây để tránh BFS lại cho từng hộp.
+int distance_to_push(const State &current, pair<int, int> box, bool mine,
+                      const array<array<int, 17>, 17> &walk_dist){
     int best = 1e9;
     int box_goal = goal_dist[mine ? 0 : 1][box.first][box.second];
     if (box_goal >= 1e9) return best;
@@ -79,12 +85,9 @@ int distance_to_push(const State &current, pair<int, int> box, bool mine){
             continue;
         if (goal_dist[mine ? 0 : 1][next_x][next_y] != box_goal - 1)
             continue;
-        if (current.get(stand_x, stand_y) != 1 &&
-            (mine ? current.me : current.enemy) != make_pair(stand_x, stand_y))
-            continue;
-        auto position = mine ? current.me : current.enemy;
-        minimize(best, abs(position.first - stand_x) +
-                       abs(position.second - stand_y));
+        int walk = walk_dist[stand_x][stand_y];
+        if (walk < 0) continue; // không có đường đi bộ thật tới ô đứng này
+        minimize(best, walk);
     }
     return best;
 }
@@ -97,6 +100,9 @@ ll quality(const State& current){
     // trong khi goal/push đã nhân với hệ số hàng trăm/nghìn - khiến việc tiến 1 bước gần hộp
     // gần như vô hình trước các thành phần khác, làm minimax không phân biệt được nước nào
     // thực sự tiến bộ ở tầm ngắn.
+    // BFS 1 lần/bên cho cả lượt gọi quality() này, dùng chung cho mọi hộp bên dưới.
+    array<array<int, 17>, 17> my_walk = bfs(current.me, current);
+    array<array<int, 17>, 17> enemy_walk = bfs(current.enemy, current);
     int best_my_approach = (int)1e9, best_enemy_approach = (int)1e9;
     for (const pair<int, int> &box : current.box){
         int my_goal = goal_dist[0][box.first][box.second];
@@ -118,8 +124,8 @@ ll quality(const State& current){
             }
         }
         res += quality_weights.push * (my_pushes - enemy_pushes);
-        minimize(best_my_approach, distance_to_push(current, box, true));
-        minimize(best_enemy_approach, distance_to_push(current, box, false));
+        minimize(best_my_approach, distance_to_push(current, box, true, my_walk));
+        minimize(best_enemy_approach, distance_to_push(current, box, false, enemy_walk));
         if (is_dead_corner(current, box)) res -= quality_weights.dead_corner;
     }
     if (best_my_approach < (int)1e9) res -= quality_weights.approach * best_my_approach;
