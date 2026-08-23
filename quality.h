@@ -9,6 +9,7 @@ struct QualityWeights {
     ll goal = 100;
     ll push = 25;
     ll dead_corner = 5000;
+    ll approach = 50; // trọng số cho khoảng cách tới hộp đáng đẩy gần nhất - xem quality()
 };
 
 QualityWeights quality_weights;
@@ -16,8 +17,11 @@ QualityWeights quality_weights;
 void load_quality_weights(){
     ifstream input("weights.dat");
     if (!(input >> quality_weights.score >> quality_weights.goal
-                >> quality_weights.push >> quality_weights.dead_corner))
+                >> quality_weights.push >> quality_weights.dead_corner)) {
         quality_weights = QualityWeights{};
+        return;
+    }
+    if (!(input >> quality_weights.approach)) quality_weights.approach = 50;
 }
 
 bool static_free(const State &board, int x, int y){
@@ -87,6 +91,13 @@ int distance_to_push(const State &current, pair<int, int> box, bool mine){
 
 ll quality(const State& current){
     ll res = quality_weights.score * (current.my_score - current.enemy_score);
+    // Khoảng cách đi bộ tới hộp ĐÁNG ĐẨY NHẤT (nhỏ nhất trong các hộp), không cộng dồn qua
+    // mọi hộp - cộng dồn sẽ bị các hộp xa (mà mình chưa nhắm tới) làm loãng tín hiệu "đang
+    // tiến gần mục tiêu thật sự". Trước đây số này còn bị cộng thẳng không qua trọng số nào,
+    // trong khi goal/push đã nhân với hệ số hàng trăm/nghìn - khiến việc tiến 1 bước gần hộp
+    // gần như vô hình trước các thành phần khác, làm minimax không phân biệt được nước nào
+    // thực sự tiến bộ ở tầm ngắn.
+    int best_my_approach = (int)1e9, best_enemy_approach = (int)1e9;
     for (const pair<int, int> &box : current.box){
         int my_goal = goal_dist[0][box.first][box.second];
         int enemy_goal = goal_dist[1][box.first][box.second];
@@ -107,11 +118,11 @@ ll quality(const State& current){
             }
         }
         res += quality_weights.push * (my_pushes - enemy_pushes);
-        int my_push_distance = distance_to_push(current, box, true);
-        int enemy_push_distance = distance_to_push(current, box, false);
-        if (my_push_distance < 1e9) res -= my_push_distance;
-        if (enemy_push_distance < 1e9) res += enemy_push_distance;
+        minimize(best_my_approach, distance_to_push(current, box, true));
+        minimize(best_enemy_approach, distance_to_push(current, box, false));
         if (is_dead_corner(current, box)) res -= quality_weights.dead_corner;
     }
+    if (best_my_approach < (int)1e9) res -= quality_weights.approach * best_my_approach;
+    if (best_enemy_approach < (int)1e9) res += quality_weights.approach * best_enemy_approach;
     return res;
 }

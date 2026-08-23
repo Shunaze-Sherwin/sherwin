@@ -41,6 +41,7 @@ signed main(int argc, char **argv){
         if (chosen_move.first == -1) cout << "S\n";
         else cout << command[chosen_move.first] << '\n';
         cout.flush();
+        last_move = chosen_move.first;
         if (chosen_move.first != -1) remember_action(current, chosen_move.first);
         if (!interactive) break;
     }
