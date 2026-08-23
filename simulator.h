@@ -52,19 +52,79 @@ vector<Move> generate_moves(const State &current, bool my_turn){
     return res;
 }
 
-// check() chỉ giữ lại cặp (nước mình, nước địch) khi áp dụng theo 2 thứ tự khác nhau cho
-// cùng kết quả (đối xứng) - nhưng luật thật (judge.cpp) luôn áp nước MÌNH trước, nước ĐỊCH
-// sau theo thứ tự cố định, không có khái niệm đồng thời/đối xứng. Dùng nó làm bộ lọc ở đây
-// vô tình loại bỏ nhiều phản ứng hợp lệ của địch khỏi minimax, khiến bot đánh giá thấp mối
-// đe dọa thật. Đã bỏ khỏi vòng lặp bên dưới (giờ luôn xét đủ mọi cặp theo đúng thứ tự judge
-// dùng); hàm vẫn giữ lại vì có thể cần dùng cho việc khác sau này.
+// judge.cpp áp 2 nước đi ĐỒNG THỜI trên CÙNG bàn gốc (không bên nào thấy bàn đã bị bên kia
+// đổi trước); nếu 2 nước THỰC SỰ tranh chấp (cùng ô, hoặc cùng đẩy 1 hộp), HUỶ CẢ HAI, không
+// ai được lợi thế thứ tự (xem apply_moves() trong judge.cpp). Trước đây simulator() luôn áp
+// nước MÌNH trước rồi coi nó chắc chắn thành công, sau đó mới cho địch phản ứng trên bàn đã
+// đổi - bot không hề biết nước của mình có thể bị huỷ do đụng độ, nên khi 2 bên (bot thật lẫn
+// đối thủ) liên tục chọn 2 nước tranh chấp nhau, bàn cờ đứng yên vĩnh viễn mà bot vẫn cứ chọn
+// lại đúng nước cũ mỗi tick vì bàn (theo bot) không hề thay đổi - kẹt tới hết ván. plan_move/
+// moves_conflict/apply_both_moves dưới đây mô phỏng lại đúng luật đó để minimax thấy trước và
+// né (hoặc khai thác) được xung đột thay vì mắc kẹt rồi mới biết.
+struct MovePlan{
+    bool valid = false;
+    pair<int, int> agent_to{-1, -1};
+    bool pushes_box = false;
+    pair<int, int> box_from{-1, -1}, box_to{-1, -1};
+    int scores = 0; // 2 nếu hộp vào đích mình, -2 nếu vào đích địch, 0 nếu không ghi điểm
+};
 
-bool check(const State &current, int my_move, int enemy_move){
-    State a = apply_move(current, my_move, true);
-    a = apply_move(a, enemy_move, false);
-    State b = apply_move(current, enemy_move, false);
-    b = apply_move(b, my_move, true);
-    return hash_table(a) == hash_table(b);
+MovePlan plan_move(const State &current, int direction, bool my_turn){
+    MovePlan plan;
+    pair<int, int> position = my_turn ? current.me : current.enemy;
+    int x = position.first + dx[direction];
+    int y = position.second + dy[direction];
+
+    if (current.get(x, y) == 1) {
+        plan.valid = true;
+        plan.agent_to = {x, y};
+        return plan;
+    }
+    int pos = find_box(current, x, y);
+    if (pos == -1) return plan;
+
+    int new_x = x + dx[direction];
+    int new_y = y + dy[direction];
+    int type = current.get(new_x, new_y);
+    if (!type) return plan;
+
+    plan.valid = true;
+    plan.agent_to = {x, y};
+    plan.pushes_box = true;
+    plan.box_from = {x, y};
+    plan.box_to = {new_x, new_y};
+    if (type == 2 || type == -2) plan.scores = type;
+    return plan;
+}
+
+vector<pair<int, int>> claimed_cells(const MovePlan &plan){
+    vector<pair<int, int>> cells;
+    if (!plan.valid) return cells;
+    cells.push_back(plan.agent_to);
+    if (plan.pushes_box && !plan.scores) cells.push_back(plan.box_to);
+    return cells;
+}
+
+bool moves_conflict(const MovePlan &mine, const MovePlan &enemy){
+    if (!mine.valid || !enemy.valid) return false;
+    if (mine.pushes_box && enemy.pushes_box && mine.box_from == enemy.box_from) return true;
+    for (pair<int, int> a : claimed_cells(mine))
+        for (pair<int, int> b : claimed_cells(enemy))
+            if (a == b) return true;
+    return false;
+}
+
+// Không tranh chấp nghĩa là 2 thay đổi độc lập, không chồng ô/hộp - luật đẩy hộp vốn đã cấm
+// đẩy hộp vào ô đang có hộp khác, nên áp tuần tự qua apply_move() (mình rồi tới địch) cho
+// đúng kết quả y hệt áp đồng thời, không cần viết lại logic ghi điểm/di chuyển hộp lần 2.
+State apply_both_moves(const State &current, int my_move, int enemy_move){
+    MovePlan mine = plan_move(current, my_move, true);
+    MovePlan enemy = plan_move(current, enemy_move, false);
+    if (moves_conflict(mine, enemy)) return current;
+    State next = current;
+    if (mine.valid) next = apply_move(next, my_move, true);
+    if (enemy.valid) next = apply_move(next, enemy_move, false);
+    return next;
 }
 
 // Tăng từ 10 (5 nước của mình) lên 14 (7 nước) - tầm nhìn 5 nước quá ngắn so với hành trình
@@ -129,7 +189,7 @@ ll simulator(const State &current, int tick, int root_tick,
         carry.first = after_me.move;
         ll tmp = 1e18;
         for (Move after_enemy : enemy) {
-            State next_2turn = apply_move(after_me.nxt_state, after_enemy.move, 0);
+            State next_2turn = apply_both_moves(current, after_me.move, after_enemy.move);
             ll nxt_quality = simulator(next_2turn, tick + 2, root_tick,
                                        alpha, beta);
             if (minimize(tmp, nxt_quality)) carry.second = after_enemy.move;

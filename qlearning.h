@@ -1,6 +1,7 @@
 #pragma once
 #include "common.h"
 #include "quality.h"
+#include "calculate_distance.h"
 
 struct QEntry {
     array<double, 4> value{};
@@ -30,8 +31,9 @@ unsigned long long state_key(const State &current) {
     pair<int, int> best_box = {0, 0};
     int best_push = (int)1e9;
     int best_direction = 4;
+    array<array<int, 17>, 17> my_walk = bfs(current.me, current);
     for (const pair<int, int> &box : current.box) {
-        int d = distance_to_push(current, box, true);
+        int d = distance_to_push(current, box, true, my_walk);
         if (d < best_push) {
             best_push = d;
             best_box = box;
