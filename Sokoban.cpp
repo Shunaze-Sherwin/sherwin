@@ -31,10 +31,11 @@ signed main(int argc, char **argv){
     while (true){
         State current;
         if (!Load_input(current)) break;
-        learn_state(current);
         pre_hash_table();
         init_quality(current);
+        learn_state(current);
         chosen_move = {-1, -1};
+        search_deadline = chrono::steady_clock::now() + SEARCH_TIME_BUDGET;
         simulator(current, 1, 1);
         chosen_move.first = learned_action(current, chosen_move.first);
         if (chosen_move.first == -1) cout << "S\n";

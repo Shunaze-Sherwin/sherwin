@@ -1,5 +1,6 @@
 #pragma once
 #include "common.h"
+#include "quality.h"
 
 struct QEntry {
     array<double, 4> value{};
@@ -13,17 +14,41 @@ int previous_score = 0;
 int previous_enemy_score = 0;
 bool has_previous_action = false;
 
+// state_key trước đây băm theo tọa độ TUYỆT ĐỐI (vị trí, từng hộp) trên bản đồ 16x16.
+// Vì bản đồ được xáo ngẫu nhiên mỗi ván (generate_board trong judge.cpp), gần như
+// không trạng thái nào lặp lại giữa các ván -> visits luôn < 3 -> learned_action() gần
+// như không bao giờ được dùng. Ở đây đổi sang đặc trưng TƯƠNG ĐỐI: lệch tọa độ (dr, dc)
+// từ mình tới hộp có lượt-đẩy-còn-thiếu (distance_to_push) ít nhất, cộng hiệu điểm và số
+// hộp còn lại, đều được rút gọn (bucket) về khoảng nhỏ. (dr, dc) vẫn là độ lệch tọa độ
+// thật nên hướng R/L/D/U học được vẫn đúng ý nghĩa trên MỌI bản đồ, không chỉ ván đã gặp.
+int clampDelta(int value, int limit) {
+    return max(-limit, min(limit, value));
+}
+
 unsigned long long state_key(const State &current) {
+    pair<int, int> best_box = {0, 0};
+    int best_push = (int)1e9;
+    for (const pair<int, int> &box : current.box) {
+        int d = distance_to_push(current, box, true);
+        if (d < best_push) { best_push = d; best_box = box; }
+    }
+
+    int dr = 0, dc = 0;
+    if (best_push < (int)1e9) {
+        dr = clampDelta(best_box.first - current.me.first, 6);
+        dc = clampDelta(best_box.second - current.me.second, 6);
+    }
+    int score_diff = clampDelta(current.my_score - current.enemy_score, 4);
+    int box_count = min((int)current.box.size(), 4);
+
     unsigned long long key = 1469598103934665603ULL;
     auto add = [&](unsigned long long value) {
         key ^= value + 0x9e3779b97f4a7c15ULL + (key << 6) + (key >> 2);
     };
-    add(current.me.first * 17 + current.me.second);
-    add(current.enemy.first * 17 + current.enemy.second);
-    add(current.my_score);
-    add(current.enemy_score);
-    for (const pair<int, int> &box : current.box)
-        add(box.first * 17 + box.second);
+    add((unsigned long long)(dr + 6));
+    add((unsigned long long)(dc + 6));
+    add((unsigned long long)(score_diff + 4));
+    add((unsigned long long)box_count);
     return key;
 }
 

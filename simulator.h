@@ -51,6 +51,13 @@ vector<Move> generate_moves(const State &current, bool my_turn){
     return res;
 }
 
+// check() chỉ giữ lại cặp (nước mình, nước địch) khi áp dụng theo 2 thứ tự khác nhau cho
+// cùng kết quả (đối xứng) - nhưng luật thật (judge.cpp) luôn áp nước MÌNH trước, nước ĐỊCH
+// sau theo thứ tự cố định, không có khái niệm đồng thời/đối xứng. Dùng nó làm bộ lọc ở đây
+// vô tình loại bỏ nhiều phản ứng hợp lệ của địch khỏi minimax, khiến bot đánh giá thấp mối
+// đe dọa thật. Đã bỏ khỏi vòng lặp bên dưới (giờ luôn xét đủ mọi cặp theo đúng thứ tự judge
+// dùng); hàm vẫn giữ lại vì có thể cần dùng cho việc khác sau này.
+
 bool check(const State &current, int my_move, int enemy_move){
     State a = apply_move(current, my_move, true);
     a = apply_move(a, enemy_move, false);
@@ -62,12 +69,22 @@ bool check(const State &current, int my_move, int enemy_move){
 int number_tick = 10;
 pair<int, int> chosen_move = {-1, -1};
 
+// Bỏ check() làm branching factor tăng lại đúng mức thật (tối đa 4x4/lượt), nên cần chặn
+// thời gian để không vượt quá 2s judge chờ mỗi nước (judge.cpp poll timeout). Hết giờ thì
+// coi node hiện tại như lá, trả quality() tĩnh thay vì tìm tiếp - suy biến an toàn, không
+// bao giờ treo hay trả kết quả rác.
+const chrono::milliseconds SEARCH_TIME_BUDGET(1500);
+chrono::steady_clock::time_point search_deadline = chrono::steady_clock::now();
+
+bool time_is_up() {
+    return chrono::steady_clock::now() >= search_deadline;
+}
+
 ll simulator(const State &current, int tick, int root_tick,
              ll alpha = -1e18, ll beta = 1e18){
-    if (tick > number_tick) return quality(current);
+    if (tick > number_tick || time_is_up()) return quality(current);
     vector<Move> me = generate_moves(current, 1);
     vector<Move> enemy = generate_moves(current, 0);
-    if (me.empty() && enemy.empty()) return quality(current);
 
     ll best_quality = -1e18;
     for (Move after_me : me){
@@ -80,10 +97,12 @@ ll simulator(const State &current, int tick, int root_tick,
                                        alpha, beta);
             if (minimize(tmp, nxt_quality)) carry.second = after_enemy.move;
             if (tmp <= alpha) break;
+            if (time_is_up()) break;
         }
         if (tmp != 1e18 && maximize(best_quality, tmp) && tick == root_tick) chosen_move = carry;
         maximize(alpha, best_quality);
         if (best_quality >= beta) break;
+        if (time_is_up()) break;
     }
     return best_quality;
 }

@@ -142,18 +142,21 @@ int decode_command(char value) {
     return -1;
 }
 
-string serialize_board(const Board &board) {
+string serialize_board(const Board &board, bool swapped = false) {
     ostringstream output;
+    auto me = swapped ? board.enemy : board.me;
+    auto enemy = swapped ? board.me : board.enemy;
     for (int row = 0; row < SIZE; ++row) {
         for (int column = 0; column < SIZE; ++column) {
             char value = board.cell[row][column];
-            if (board.me == make_pair(row, column)) value = 'a';
-            if (board.enemy == make_pair(row, column)) value = 'b';
+            if (me == make_pair(row, column)) value = 'a';
+            if (enemy == make_pair(row, column)) value = 'b';
             output << value;
         }
         output << '\n';
     }
-    output << board.my_score << ' ' << board.enemy_score << '\n';
+    output << (swapped ? board.enemy_score : board.my_score) << ' '
+           << (swapped ? board.my_score : board.enemy_score) << '\n';
     return output.str();
 }
 
@@ -212,27 +215,39 @@ public:
         return result;
     }
 
-    int move(const Board &board) {
-        if (!send_board(board)) return -1;
+    int move(const Board &board, bool swapped = false) {
+        string data = serialize_board(board, swapped);
+        size_t sent = 0;
+        while (sent < data.size()) {
+            ssize_t count = write(input, data.data() + sent, data.size() - sent);
+            if (count <= 0) return -1;
+            sent += count;
+        }
         return receive_move();
     }
 };
 
+// Trước đây mỗi ván chỉ nhích goal/push đúng +-1 bất kể thắng đậm hay sát nút, nên tín
+// hiệu từ một ván ăn may/xui vẫn tác động y hệt một ván áp đảo thực sự, dễ dao động qua
+// lại quanh biên (100000 1000 500 5000 hiện đang kẹt ở trần 1000/500 từ trước). Giờ dùng
+// trung bình động (EMA) của chênh lệch điểm để làm mượt nhiễu giữa các ván, rồi mới suy ra
+// bước nhích theo đúng xu hướng gần đây thay vì phản ứng tức thời với 1 ván đơn lẻ.
 void update_weights(int my_score, int enemy_score) {
     long long score, goal, push, dead_corner;
+    double margin_ema;
     ifstream input("weights.dat");
     if (!(input >> score >> goal >> push >> dead_corner))
         score = 100000, goal = 100, push = 25, dead_corner = 5000;
+    if (!(input >> margin_ema)) margin_ema = 0.0;
 
-    if (my_score > enemy_score) {
-        goal = min(1000LL, goal + 1);
-        push = min(500LL, push + 1);
-    } else if (my_score < enemy_score) {
-        goal = max(1LL, goal - 1);
-        push = max(1LL, push - 1);
-    }
+    margin_ema = 0.9 * margin_ema + 0.1 * (my_score - enemy_score);
+    long long step = llround(max(-3.0, min(3.0, margin_ema)));
+
+    goal = max(1LL, min(1000LL, goal + step));
+    push = max(1LL, min(500LL, push + step));
+
     ofstream output("weights.dat");
-    output << score << ' ' << goal << ' ' << push << ' ' << dead_corner << '\n';
+    output << score << ' ' << goal << ' ' << push << ' ' << dead_corner << ' ' << margin_ema << '\n';
 }
 
 int random_legal_move(const Board &board, bool mine, mt19937 &rng) {
@@ -271,17 +286,27 @@ int human_move(const Board &board) {
 
 int main(int argc, char **argv) {
     if (argc < 2) {
-        cerr << "Usage: ./judge <bot-executable> [games] [ticks]\\n";
+        cerr << "Usage: ./judge <bot-a> [bot-b] [games] [ticks]\\n";
         return 1;
     }
-    int games = argc >= 3 ? atoi(argv[2]) : 100;
-    int ticks = argc >= 4 ? atoi(argv[3]) : 50;
-    bool human = argc >= 5 && string(argv[4]) == "human";
+    bool second_bot_given = argc >= 3 && string(argv[2]) != "human" &&
+                            !isdigit(static_cast<unsigned char>(argv[2][0]));
+    const char *second_bot = second_bot_given ? argv[2] : nullptr;
+    int games = second_bot_given ? (argc >= 4 ? atoi(argv[3]) : 100)
+                                 : (argc >= 3 ? atoi(argv[2]) : 100);
+    int ticks = second_bot_given ? (argc >= 5 ? atoi(argv[4]) : 50)
+                                 : (argc >= 4 ? atoi(argv[3]) : 50);
+    bool human = !second_bot_given && argc >= 5 && string(argv[4]) == "human";
     mt19937 rng(chrono::steady_clock::now().time_since_epoch().count());
     Board initial = read_board("current_test.INP");
-    BotProcess bot(argv[1]);
+    BotProcess bot_a(argv[1]);
+    unique_ptr<BotProcess> bot_b;
+    if (second_bot) bot_b = make_unique<BotProcess>(second_bot);
     ofstream log("training.log", ios::app);
+    vector<tuple<int, int, int>> results;
     int wins = 0;
+    int draws = 0;
+    int losses = 0;
 
     for (int game = 0; game < games; ++game) {
         Board board = generate_board(initial, rng);
@@ -293,14 +318,17 @@ int main(int argc, char **argv) {
             int my_move;
             int enemy_move;
             if (human) {
-                if (!bot.send_board(board)) {
+                if (!bot_a.send_board(board)) {
                     cerr << "bot input pipe closed\n";
                     break;
                 }
                 enemy_move = human_move(board);
-                my_move = bot.receive_move();
+                my_move = bot_a.receive_move();
+            } else if (bot_b) {
+                my_move = bot_a.move(board);
+                enemy_move = bot_b->move(board, true);
             } else {
-                my_move = bot.move(board);
+                my_move = bot_a.move(board);
                 enemy_move = random_legal_move(board, false, rng);
             }
               if (my_move < 0) {
@@ -314,14 +342,36 @@ int main(int argc, char **argv) {
               cerr << "game " << game + 1 << ", tick " << tick + 1
                   << ": sent board, bot=" << command[my_move]
                   << ", enemy=" << command[enemy_move] << '\n';
-            if (board.my_score > board.enemy_score) ++wins;
             log << game << ' ' << tick << ' ' << board.my_score << ' '
                 << board.enemy_score << ' ' << command[my_move] << ' '
                 << command[enemy_move] << '\n';
         }
         cerr << "game " << game + 1 << "/" << games << ": "
              << board.my_score << '-' << board.enemy_score << '\n';
+           results.emplace_back(game + 1, board.my_score, board.enemy_score);
+           if (board.my_score > board.enemy_score) ++wins;
+           else if (board.my_score == board.enemy_score) ++draws;
+           else ++losses;
         update_weights(board.my_score, board.enemy_score);
     }
-    cout << "completed " << games << " games, leading ticks: " << wins << '\n';
+            cout << "\n+--------+----------+----------+--------+\n";
+            cout << "| Game   | Bot A    | Bot B    | Result |\n";
+            cout << "+--------+----------+----------+--------+\n";
+        for (const auto &[game, score_a, score_b] : results) {
+           string result = score_a > score_b ? "WIN" :
+                        score_a < score_b ? "LOSS" : "DRAW";
+               cout << "| " << left << setw(6) << game
+                   << " | " << setw(8) << score_a
+                   << " | " << setw(8) << score_b
+                   << " | " << setw(6) << result << " |\n";
+        }
+            cout << "+--------+----------+----------+--------+\n";
+            cout << "\n+--------+--------+--------+--------+\n";
+            cout << "| Bot    | Wins   | Draws  | Losses |\n";
+            cout << "+--------+--------+--------+--------+\n";
+            cout << "| Bot A  | " << left << setw(6) << wins
+                << " | " << setw(6) << draws << " | " << setw(6) << losses << " |\n";
+            cout << "| Bot B  | " << left << setw(6) << losses
+                << " | " << setw(6) << draws << " | " << setw(6) << wins << " |\n";
+            cout << "+--------+--------+--------+--------+\n";
 }
