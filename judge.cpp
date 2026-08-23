@@ -116,24 +116,78 @@ bool legal_step(const Board &board, bool mine, int direction) {
     return destination == '.' || is_goal(destination);
 }
 
-bool apply_move(Board &board, bool mine, int direction) {
-    if (!legal_step(board, mine, direction)) return false;
-    auto &position = mine ? board.me : board.enemy;
-    int x = position.first + dx[direction];
-    int y = position.second + dy[direction];
+// Dự tính hiệu ứng của 1 nước đi trên `board` (KHÔNG thay đổi board) để có thể tính cả 2
+// bên trên cùng một trạng thái gốc, rồi mới quyết định ai thực sự được áp dụng.
+struct MovePlan {
+    bool valid = false;
+    pair<int, int> agent_to{-1, -1};
+    bool pushes_box = false;
+    pair<int, int> box_from{-1, -1}, box_to{-1, -1};
+    char goal_scored = 0; // 'A'/'B' nếu hộp vào đích, 0 nếu không ghi điểm
+};
+
+MovePlan plan_move(const Board &board, bool mine, int direction) {
+    MovePlan plan;
+    if (!legal_step(board, mine, direction)) return plan;
+    auto position = mine ? board.me : board.enemy;
+    plan.valid = true;
+    plan.agent_to = {position.first + dx[direction], position.second + dy[direction]};
+    int x = plan.agent_to.first, y = plan.agent_to.second;
     if (board.cell[x][y] == 'X') {
-        int box_x = x + dx[direction];
-        int box_y = y + dy[direction];
-        if (is_goal(board.cell[box_x][box_y])) {
-            if (board.cell[box_x][box_y] == 'A') ++board.my_score;
-            else ++board.enemy_score;
-        } else {
-            board.cell[box_x][box_y] = 'X';
-        }
-        board.cell[x][y] = '.';
+        plan.pushes_box = true;
+        plan.box_from = {x, y};
+        plan.box_to = {x + dx[direction], y + dy[direction]};
+        char destination = board.cell[plan.box_to.first][plan.box_to.second];
+        if (is_goal(destination)) plan.goal_scored = destination;
     }
-    position = {x, y};
-    return true;
+    return plan;
+}
+
+// Các ô mà 1 kế hoạch sẽ "chiếm" sau khi thực thi (vị trí agent mới, và vị trí hộp mới nếu
+// hộp không biến mất vào đích) - dùng để phát hiện 2 bên có tranh nhau cùng 1 ô hay không.
+vector<pair<int, int>> claimed_cells(const MovePlan &plan) {
+    vector<pair<int, int>> cells;
+    if (!plan.valid) return cells;
+    cells.push_back(plan.agent_to);
+    if (plan.pushes_box && !plan.goal_scored) cells.push_back(plan.box_to);
+    return cells;
+}
+
+void commit_plan(Board &board, const MovePlan &plan, pair<int, int> &agent_position) {
+    if (!plan.valid) return;
+    if (plan.pushes_box) {
+        if (plan.goal_scored == 'A') ++board.my_score;
+        else if (plan.goal_scored == 'B') ++board.enemy_score;
+        else board.cell[plan.box_to.first][plan.box_to.second] = 'X';
+        board.cell[plan.box_from.first][plan.box_from.second] = '.';
+    }
+    agent_position = plan.agent_to;
+}
+
+// Áp dụng 2 nước đi ĐỒNG THỜI: cả 2 bên được xét hợp lệ trên CÙNG một board gốc (không bên
+// nào thấy board đã bị bên kia thay đổi trước), nên không ai có lợi thế thứ tự xử lý. Nếu 2
+// kế hoạch thực sự tranh chấp (tranh cùng ô, cùng đẩy 1 hộp), huỷ CẢ HAI - không ưu tiên bên
+// nào - thay vì trước đây luôn coi nước của "mình" (bot A) thắng vì được apply trước.
+void apply_moves(Board &board, int my_move, int enemy_move) {
+    Board snapshot = board;
+    MovePlan my_plan = plan_move(snapshot, true, my_move);
+    MovePlan enemy_plan = plan_move(snapshot, false, enemy_move);
+
+    if (my_plan.valid && enemy_plan.valid) {
+        bool same_box = my_plan.pushes_box && enemy_plan.pushes_box &&
+                         my_plan.box_from == enemy_plan.box_from;
+        bool cell_conflict = false;
+        for (pair<int, int> a : claimed_cells(my_plan))
+            for (pair<int, int> b : claimed_cells(enemy_plan))
+                if (a == b) cell_conflict = true;
+        if (same_box || cell_conflict) {
+            my_plan.valid = false;
+            enemy_plan.valid = false;
+        }
+    }
+
+    commit_plan(board, my_plan, board.me);
+    commit_plan(board, enemy_plan, board.enemy);
 }
 
 int decode_command(char value) {
@@ -142,6 +196,13 @@ int decode_command(char value) {
     return -1;
 }
 
+// `swapped=true` gửi board theo góc nhìn "tự-quy-chiếu" cho bot ở vị trí B: bot luôn thấy
+// mình là 'a' và đích của MÌNH luôn là 'A' (đúng quy ước mà bot_greedy.cpp/Sokoban.cpp code
+// cứng: 'a'/'A' luôn là của mình). Trước đây chỉ đổi nhãn AGENT ('a'<->'b') mà không đổi
+// nhãn Ô ĐÍCH ('A'<->'B') trong địa hình, nên bot ở vị trí B vẫn thấy đích thật của mình là
+// 'B' và tưởng 'A' (đích của đối thủ) là của mình - tức nó chủ động đẩy hộp giúp đối thủ ghi
+// điểm. Đây là nguyên nhân chính khiến vị trí A luôn thắng bất kể bot nào, kể cả khi 2 bên
+// chạy cùng 1 bot.
 string serialize_board(const Board &board, bool swapped = false) {
     ostringstream output;
     auto me = swapped ? board.enemy : board.me;
@@ -149,6 +210,10 @@ string serialize_board(const Board &board, bool swapped = false) {
     for (int row = 0; row < SIZE; ++row) {
         for (int column = 0; column < SIZE; ++column) {
             char value = board.cell[row][column];
+            if (swapped) {
+                if (value == 'A') value = 'B';
+                else if (value == 'B') value = 'A';
+            }
             if (me == make_pair(row, column)) value = 'a';
             if (enemy == make_pair(row, column)) value = 'b';
             output << value;
@@ -337,8 +402,7 @@ int main(int argc, char **argv) {
                  break;
               }
             if (enemy_move < 0) break;
-            apply_move(board, true, my_move);
-            apply_move(board, false, enemy_move);
+            apply_moves(board, my_move, enemy_move);
               cerr << "game " << game + 1 << ", tick " << tick + 1
                   << ": sent board, bot=" << command[my_move]
                   << ", enemy=" << command[enemy_move] << '\n';
