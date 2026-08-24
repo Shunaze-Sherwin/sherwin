@@ -260,36 +260,3 @@ inline bool isBoxDeadlocked(const Grid& g, Pos box) {
     bool wallDown  = g.isWall({box.r + 1, box.c});
     return (wallLeft || wallRight) && (wallUp || wallDown);
 }
-
-// ============================================================================
-// isFrozenSquare — mở rộng isBoxDeadlocked cho thế kẹt "khối vuông 2x2" giữa
-// HỘP VỚI HỘP (isBoxDeadlocked chỉ xét tường quanh 1 hộp, không biết hộp khác
-// cũng có thể đóng vai trò như tường tạm thời).
-//
-// Nếu 1 ô p (dự định đặt hộp vào đó) cùng với 2 ô kề trục + 1 ô chéo tạo
-// thành 1 hình vuông 2x2 mà cả 4 ô đều là tường hoặc có hộp khác, thì không
-// hộp nào trong khối đó còn đẩy được nữa: với hộp tại 1 góc bất kỳ của khối,
-// mọi hướng đẩy đều cần "dest" hoặc "stand" trùng đúng 1 trong 2 ô kề trục
-// còn lại của khối (đã bị chiếm) — xem chứng minh chi tiết ở bản gốc
-// greedy_bot2/rules.cpp. Đây là luật deadlock chuẩn, không phụ thuộc đích ở
-// đâu nên không bao giờ chặn nhầm 1 nước đi còn khả thi (chỉ có thể bỏ sót
-// thế kẹt phức tạp hơn 2x2, không bao giờ false-positive).
-inline bool isFrozenSquare(const Grid& g, Pos p, const vector<Pos>& otherBoxes) {
-    if (g.cell[p.r][p.c] == 'A' || g.cell[p.r][p.c] == 'B') return false;
-
-    auto occupied = [&](Pos q) {
-        if (g.isWall(q)) return true;
-        for (const Pos& b : otherBoxes) if (b == q) return true;
-        return false;
-    };
-
-    const int quadR[] = {-1, -1, 1, 1};
-    const int quadC[] = {-1, 1, -1, 1};
-    for (int k = 0; k < 4; ++k) {
-        Pos horiz = {p.r, p.c + quadC[k]};
-        Pos vert  = {p.r + quadR[k], p.c};
-        Pos diag  = {p.r + quadR[k], p.c + quadC[k]};
-        if (occupied(horiz) && occupied(vert) && occupied(diag)) return true;
-    }
-    return false;
-}
