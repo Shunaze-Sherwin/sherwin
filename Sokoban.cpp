@@ -37,7 +37,14 @@ signed main(int argc, char **argv){
         chosen_move = {-1, -1};
         search_deadline = chrono::steady_clock::now() + SEARCH_TIME_BUDGET;
         run_search(current);
-        chosen_move.first = learned_action(current, chosen_move.first);
+        // learned_action() có thể gợi ý một nước khác với minimax - nhưng nếu nước đó
+        // ĐẢO NGƯỢC last_move, bỏ qua gợi ý và giữ lựa chọn của minimax (đã có
+        // REVERSAL_PENALTY chống đảo-ngược ở run_search()). Q-table dùng state_key()
+        // dạng tương đối/kẹp (clamp) nên nhiều vị trí thật khác nhau có thể băm trùng
+        // key, khiến 2 "bucket" học được hành động trỏ vòng qua lại nhau (A->B, B->A) -
+        // không kiểm tra ở đây thì override sẽ phá luôn REVERSAL_PENALTY và gây lặp vô hạn.
+        int learned = learned_action(current, chosen_move.first);
+        if (!is_reverse_move(learned, last_move)) chosen_move.first = learned;
         if (chosen_move.first == -1) cout << "S\n";
         else cout << command[chosen_move.first] << '\n';
         cout.flush();

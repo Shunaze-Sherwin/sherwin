@@ -251,9 +251,16 @@ ll evaluate_root_candidate(const State &current, const Move &after_me, const vec
     return tmp;
 }
 
-// Phạt nhẹ để chống đảo-ngược khi so sánh ứng viên GỐC - không đủ lớn để lật một nước
-// thực sự tốt hơn, chỉ đủ để phá hòa khi các ứng viên đang ngang điểm nhau.
-const ll REVERSAL_PENALTY = 10;
+// Phạt đảo-ngược khi so sánh ứng viên GỐC. Trước đây =10 - vô hình so với thang trọng số
+// quality() (score=100000, dead_corner=5000, goal=100, approach=50, push=25): chỉ 1 đơn vị
+// thay đổi ở approach/goal/push đã vượt xa mức phạt này, nên minimax không hề bị cản khi đảo
+// hướng mỗi tick (xác nhận thực nghiệm: bot vẫn lặp 15xL/15xR dù đã có phạt 10). Nâng lên
+// ngang tầm goal/approach*vài chục bước để thực sự cân được các thành phần đó, nhưng vẫn nhỏ
+// hơn dead_corner - không được phép khiến bot đi vào góc chết hay bỏ lỡ điểm chỉ để né đảo
+// hướng. Lưu ý: chỉ so last_move (1 nước ngay trước) nên KHÔNG bắt được chu trình có tick đệm
+// xen giữa (vd L...D...R...D...L, tick D làm last_move không còn là hướng ngang bị đảo) - đã
+// xác nhận đây chính là dạng bug thực tế gặp phải, mức tăng này giảm nhẹ chứ không triệt để.
+const ll REVERSAL_PENALTY = 3000;
 
 // Thay simulator(current, 1, 1) gọi trực tiếp: điều phối việc chia 4 ứng viên nước đi
 // gốc cho các luồng, CHỜ tất cả xong (join) rồi mới đọc kết quả và ghi chosen_move ở

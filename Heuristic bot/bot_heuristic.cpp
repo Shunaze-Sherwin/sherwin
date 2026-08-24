@@ -27,3 +27,39 @@ char botHeuristic(const gamestate& state, bool isa) {
     
     return bestMove;
 }
+
+int main(int argc, char **argv) {
+    if (argc < 2 || string(argv[1]) != "--interactive") return 1;
+
+    ios::sync_with_stdio(false);
+    cin.tie(nullptr);
+
+    while (true) {
+        vector<string> lines(16);
+        for (string &line : lines) {
+            if (!(cin >> line)) return 0;
+        }
+
+        gamestate state;
+        state.grid = inp(lines);
+        for (int row = 0; row < 16; ++row) {
+            for (int column = 0; column < 16; ++column) {
+                char &cell = state.grid.cell[row][column];
+                if (cell == 'a') {
+                    state.a = {row, column};
+                    cell = '.';
+                } else if (cell == 'b') {
+                    state.b = {row, column};
+                    cell = '.';
+                } else if (cell == 'X') {
+                    state.boxes.push_back({row, column});
+                    cell = '.';
+                }
+            }
+        }
+
+        if (!(cin >> state.scoreA >> state.scoreB)) return 0;
+        cout << botHeuristic(state, true) << '\n';
+        cout.flush();
+    }
+}

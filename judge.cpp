@@ -12,6 +12,16 @@ const int SIZE = 16;
 const int dx[] = {0, 0, 1, -1};
 const int dy[] = {1, -1, 0, 0};
 const char command[] = {'R', 'L', 'D', 'U'};
+// Cả 3 bot trong repo (Sokoban.cpp, bot_greedy.cpp, bot_heuristic.cpp) đều có thể chủ
+// động xuất ký tự 'S' (đứng yên) khi không nước nào tốt hơn - đây là lựa chọn HỢP LỆ
+// theo thiết kế, không phải bot lỗi. Trước đây decode_command() không nhận diện 'S'
+// (không có trong command[]/R,L,D,U) nên trả -1 giống hệt trường hợp bot thật sự lỗi/
+// treo, khiến main() ở dưới HỦY CẢ VÁN ĐẤU ngay khi bất kỳ bên nào chọn đứng yên - đã
+// đo thực tế: bot_heuristic (thiết kế coi 'S' là 1 trong 5 ứng viên mỗi nước) khiến ván
+// nào cũng bị cắt cụt sau 7-14 tick thay vì chạy hết. STAY là số KHÔNG ÂM (khác mọi
+// direction 0-3 và khác -1 dành riêng cho lỗi thật) để mọi chỗ đang so sánh `>= 0` hay
+// `< 0` (nghĩa là "hợp lệ") tự động coi STAY là hợp lệ mà không cần sửa thêm.
+const int STAY = 4;
 
 struct Board {
     array<array<char, SIZE>, SIZE> cell{};
@@ -103,6 +113,7 @@ bool is_goal(char value) {
 }
 
 bool legal_step(const Board &board, bool mine, int direction) {
+    if (direction == STAY) return true; // đứng yên luôn hợp lệ, không đụng ô/hộp nào
     auto position = mine ? board.me : board.enemy;
     int x = position.first + dx[direction];
     int y = position.second + dy[direction];
@@ -132,6 +143,15 @@ struct MovePlan {
 
 MovePlan plan_move(const Board &board, bool mine, int direction) {
     MovePlan plan;
+    if (direction == STAY) {
+        // Đứng yên: agent_to = vị trí hiện tại, không đẩy hộp - claimed_cells() bên
+        // dưới sẽ tự "chiếm" đúng ô agent đang đứng, nên xung đột (địch cố đẩy hộp vào
+        // đúng ô mình đang đứng yên) vẫn được moves_conflict() phát hiện đúng như một
+        // nước đi thật, dù thực ra không có gì di chuyển.
+        plan.valid = true;
+        plan.agent_to = mine ? board.me : board.enemy;
+        return plan;
+    }
     if (!legal_step(board, mine, direction)) return plan;
     auto position = mine ? board.me : board.enemy;
     plan.valid = true;
@@ -195,9 +215,17 @@ void apply_moves(Board &board, int my_move, int enemy_move) {
 }
 
 int decode_command(char value) {
+    if (value == 'S') return STAY;
     for (int direction = 0; direction < 4; ++direction)
         if (command[direction] == value) return direction;
     return -1;
+}
+
+// command[] chỉ có 4 phần tử (0-3) - command[STAY] sẽ đọc ngoài mảng, nên mọi chỗ in
+// lại ký tự nước đi (log tiến trình, training.log) phải qua hàm này thay vì đọc thẳng
+// command[direction].
+char command_char(int direction) {
+    return direction == STAY ? 'S' : command[direction];
 }
 
 // `swapped=true` gửi board theo góc nhìn "tự-quy-chiếu" cho bot ở vị trí B: bot luôn thấy
@@ -379,7 +407,7 @@ void print_board(const Board &board) {
 
 int human_move(const Board &board) {
     while (true) {
-        cerr << "Your move (R/L/D/U): ";
+        cerr << "Your move (R/L/D/U/S): ";
         char value;
         if (!(cin >> value)) return -1;
         value = static_cast<char>(toupper(static_cast<unsigned char>(value)));
@@ -445,11 +473,11 @@ int main(int argc, char **argv) {
             if (enemy_move < 0) break;
             apply_moves(board, my_move, enemy_move);
               cerr << "game " << game + 1 << ", tick " << tick + 1
-                  << ": sent board, bot=" << command[my_move]
-                  << ", enemy=" << command[enemy_move] << '\n';
+                  << ": sent board, bot=" << command_char(my_move)
+                  << ", enemy=" << command_char(enemy_move) << '\n';
             log << game << ' ' << tick << ' ' << board.my_score << ' '
-                << board.enemy_score << ' ' << command[my_move] << ' '
-                << command[enemy_move] << '\n';
+                << board.enemy_score << ' ' << command_char(my_move) << ' '
+                << command_char(enemy_move) << '\n';
         }
         cerr << "game " << game + 1 << "/" << games << ": "
              << board.my_score << '-' << board.enemy_score << '\n';
