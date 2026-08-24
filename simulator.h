@@ -167,6 +167,42 @@ bool is_reverse_move(int a, int b) {
            (a == 2 && b == 3) || (a == 3 && b == 2);
 }
 
+// Lịch sử ~20 vị trí THẬT gần nhất của bot (ghi mỗi tick THẬT trong run_search(), không phải
+// trong search giả định) - đã xác nhận thực nghiệm (workflow A/B: penalty 10 vs 3000, 40 ván,
+// cùng qtable.dat thật) rằng REVERSAL_PENALTY - dù tăng lên bao nhiêu - KHÔNG bắt được chu
+// trình lặp vị trí dạng có tick đệm (vd L,D,R,D,L,D,R,...) vì nó chỉ so với last_move (1 nước
+// NGAY TRƯỚC), mà nước ngay trước mỗi lần đảo chiều luôn là tick đệm D/U chứ không phải chính
+// hướng bị đảo - điều kiện kích hoạt phạt không bao giờ xảy ra. Cơ chế dưới đây chặn TỪ GỐC dựa
+// trên VỊ TRÍ THỰC TẾ đã đứng, không phụ thuộc chuỗi nước đi cụ thể nên bắt được mọi chu kỳ bất
+// kể có đệm hay không, miễn bot quay lại đúng ô cũ.
+// 20 ban đầu KHÔNG đủ - đã xác nhận thực nghiệm (workflow kiểm chứng, 25 ván) chu kỳ vẫn còn
+// gần như nguyên vẹn (100% ván heuristic_bot, 90% ván greedy_bot vẫn dính) vì các đoạn quan sát
+// được dài phổ biến ~15 tick: đi hết 1 đoạn 15 tick rồi quay lại thì vị trí xuất phát đã rớt
+// khỏi cửa sổ 20. Nâng lên 100 - chi phí kiểm tra chỉ là quét tuyến tính ~100 phần tử cho tối đa
+// 4 ứng viên mỗi tick, không đáng kể so với ngân sách tìm kiếm 1.5s.
+const size_t POSITION_HISTORY_SIZE = 100;
+deque<pair<int, int>> recent_positions;
+
+void record_position(pair<int, int> pos) {
+    recent_positions.push_back(pos);
+    if (recent_positions.size() > POSITION_HISTORY_SIZE) recent_positions.pop_front();
+}
+
+bool visited_recently(pair<int, int> pos) {
+    for (const pair<int, int> &p : recent_positions) if (p == pos) return true;
+    return false;
+}
+
+// Nước có đẩy hộp KHÔNG bao giờ bị chặn dù dẫn về ô cũ - đẩy hộp là công việc thật (vd đi vòng
+// qua hộp để đẩy từ phía đối diện), không phải dậm chân tại chỗ. Chỉ nước đi bộ thuần tuý mới
+// đáng ngờ khi quay lại vị trí đã đứng gần đây.
+bool move_pushes_box(const State &current, int direction) {
+    int x = current.me.first + dx[direction];
+    int y = current.me.second + dy[direction];
+    if (current.get(x, y) == 1) return false; // ô trống - đi bộ, không đẩy gì
+    return find_box(current, x, y) != -1; // generate_moves() đã lọc hợp lệ nên chắc chắn là đẩy hộp
+}
+
 // Máy có 4 lõi CPU nhưng bản trước chạy đơn luồng: mỗi tick, minimax luôn ghim sát
 // trần SEARCH_TIME_BUDGET (1.5s) vì cây (nhánh tới 4x4/lượt, sâu 12) gần như không
 // bao giờ duyệt hết trong ngần ấy thời gian, bất kể code bên trong nhanh cỡ nào - tối
@@ -269,9 +305,21 @@ const ll REVERSAL_PENALTY = 3000;
 void run_search(const State &current){
     chosen_move = {-1, -1};
     shared_alpha.store(-1e18, memory_order_relaxed);
+    record_position(current.me);
     vector<Move> me = generate_moves(current, 1);
     vector<Move> enemy = generate_moves(current, 0);
     if (me.empty()) return;
+
+    // Loại bớt ứng viên GỐC thuần đi bộ (không đẩy hộp) dẫn về 1 ô đã đứng trong ~20 tick gần
+    // đây - chặn chu kỳ TỪ GỐC dựa trên vị trí thực tế, không phụ thuộc mức REVERSAL_PENALTY
+    // (xem giải thích ở visited_recently() phía trên). Luôn giữ lại ít nhất 1 ứng viên: nếu lọc
+    // hết sạch (mọi hướng đều dẫn về ô cũ, vd ngõ cụt thật) thì dùng lại danh sách đầy đủ, không
+    // bao giờ để rỗng.
+    vector<Move> filtered;
+    for (const Move &m : me)
+        if (move_pushes_box(current, m.move) || !visited_recently(m.nxt_state.me))
+            filtered.push_back(m);
+    if (!filtered.empty()) me = filtered;
 
     unsigned hardware_threads = max(1u, thread::hardware_concurrency());
     int worker_count = (int)min<size_t>(me.size(), hardware_threads);
