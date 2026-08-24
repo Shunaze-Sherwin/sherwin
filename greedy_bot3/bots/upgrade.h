@@ -5,106 +5,106 @@
 #include "../core/timer.cpp"
 using namespace std;
 
-// upgrade.h — bản botGreedy có 2 cải tiến port từ greedy_bot2/bot_greedy.cpp
-// (đã kiểm chứng có lợi bằng đấu thử judge.exe), tách riêng khỏi bot_greedy.cpp
-// gốc để giữ nguyên file gốc không đổi. Đây là bản THAY THẾ (cùng tên hàm
-// botGreedy) — muốn dùng bản này thay vì bản gốc thì đổi include trong
-// main.cpp từ "bot_greedy.cpp" sang "upgrade.h" (KHÔNG include cả 2 cùng lúc
-// trong 1 file .cpp, sẽ bị lỗi định nghĩa trùng tên).
-//
-// Kết quả đấu thử (greedy_bot3 dùng bản upgrade này) trong repo sherwin:
-//   vs greedy_bot2:        200 ván: 52-87-61 | 400 ván: 125-179-96 | 1000 ván: 324-408-268
-//                           (greedy_bot2 thắng đều ~55-57% số ván phân thắng bại)
-//   vs greedy_bot (gốc):   200 ván: 83 thắng - 74 hòa - 43 thua
-//   vs heuristic_bot:      200 ván: 153 thắng - 46 hòa - 1 thua
-//   vs custom (Q-learning): 10 ván: 9 thắng - 0 hòa - 1 thua
+// upgrade.h — bản botGreedy có 2 cải tiến port từ greedy_bot2/bot_greedy.cpp //upgrade
+// (đã kiểm chứng có lợi bằng đấu thử judge.exe), tách riêng khỏi bot_greedy.cpp //upgrade
+// gốc để giữ nguyên file gốc không đổi. Đây là bản THAY THẾ (cùng tên hàm //upgrade
+// botGreedy) — muốn dùng bản này thay vì bản gốc thì đổi include trong //upgrade
+// main.cpp từ "bot_greedy.cpp" sang "upgrade.h" (KHÔNG include cả 2 cùng lúc //upgrade
+// trong 1 file .cpp, sẽ bị lỗi định nghĩa trùng tên). //upgrade
+// //upgrade
+// Kết quả đấu thử (greedy_bot3 dùng bản upgrade này) trong repo sherwin: //upgrade
+//   vs greedy_bot2:        200 ván: 52-87-61 | 400 ván: 125-179-96 | 1000 ván: 324-408-268 //upgrade
+//                           (greedy_bot2 thắng đều ~55-57% số ván phân thắng bại) //upgrade
+//   vs greedy_bot (gốc):   200 ván: 83 thắng - 74 hòa - 43 thua //upgrade
+//   vs heuristic_bot:      200 ván: 153 thắng - 46 hòa - 1 thua //upgrade
+//   vs custom (Q-learning): 10 ván: 9 thắng - 0 hòa - 1 thua //upgrade
 
 const int GREEDY_DIST_CAP = 40;
 
-// Trọng số chi phí đi bộ trong hàm chấm điểm: đủ lớn để chi phí LUÔN quyết định
-// trước gain (giữ nguyên hành vi gốc: so cost trước, gain chỉ phá hòa). Tranh
-// chấp đối thủ bên dưới chỉ có tác dụng phá hòa/gần-hòa giữa các ứng viên có
-// chi phí xấp xỉ nhau, không bao giờ lật ngược một chênh lệch cost rõ ràng.
-const int COST_WEIGHT = 100;
+// Trọng số chi phí đi bộ trong hàm chấm điểm: đủ lớn để chi phí LUÔN quyết định //upgrade
+// trước gain (giữ nguyên hành vi gốc: so cost trước, gain chỉ phá hòa). Tranh //upgrade
+// chấp đối thủ bên dưới chỉ có tác dụng phá hòa/gần-hòa giữa các ứng viên có //upgrade
+// chi phí xấp xỉ nhau, không bao giờ lật ngược một chênh lệch cost rõ ràng. //upgrade
+const int COST_WEIGHT = 100; //upgrade
 
-// Trọng số điều chỉnh theo mức độ "nóng" của cuộc tranh chấp hộp (port từ
-// greedy_bot2/bot_greedy.cpp, đã kiểm chứng có lợi bằng đấu thử judge.exe).
-const int CONTEST_RANGE = 8;       // đối thủ trong tầm này coi là đang thực sự nhắm hộp
-const int CONTEST_WEIGHT = 2;      // độ ưu tiên cộng thêm khi tranh hộp nóng
-const int LOSING_RACE_PENALTY = 1; // độ hạ ưu tiên mỗi bước khi chắc chắn thua đối thủ
+// Trọng số điều chỉnh theo mức độ "nóng" của cuộc tranh chấp hộp (port từ //upgrade
+// greedy_bot2/bot_greedy.cpp, đã kiểm chứng có lợi bằng đấu thử judge.exe). //upgrade
+const int CONTEST_RANGE = 8;       // đối thủ trong tầm này coi là đang thực sự nhắm hộp //upgrade
+const int CONTEST_WEIGHT = 2;      // độ ưu tiên cộng thêm khi tranh hộp nóng //upgrade
+const int LOSING_RACE_PENALTY = 1; // độ hạ ưu tiên mỗi bước khi chắc chắn thua đối thủ //upgrade
 
-// ============================================================================
-// isFrozenSquare — mở rộng isBoxDeadlocked (game/rules.cpp) cho thế kẹt "khối
-// vuông 2x2" giữa HỘP VỚI HỘP (isBoxDeadlocked chỉ xét tường quanh 1 hộp,
-// không biết hộp khác cũng có thể đóng vai trò như tường tạm thời).
-//
-// Nếu 1 ô p (dự định đặt hộp vào đó) cùng với 2 ô kề trục + 1 ô chéo tạo
-// thành 1 hình vuông 2x2 mà cả 4 ô đều là tường hoặc có hộp khác, thì không
-// hộp nào trong khối đó còn đẩy được nữa: với hộp tại 1 góc bất kỳ của khối,
-// mọi hướng đẩy đều cần "dest" hoặc "stand" trùng đúng 1 trong 2 ô kề trục
-// còn lại của khối (đã bị chiếm) — xem chứng minh chi tiết ở bản gốc
-// greedy_bot2/rules.cpp. Đây là luật deadlock chuẩn, không phụ thuộc đích ở
-// đâu nên không bao giờ chặn nhầm 1 nước đi còn khả thi (chỉ có thể bỏ sót
-// thế kẹt phức tạp hơn 2x2, không bao giờ false-positive).
-inline bool isFrozenSquare(const Grid& g, Pos p, const vector<Pos>& otherBoxes) {
-    if (g.cell[p.r][p.c] == 'A' || g.cell[p.r][p.c] == 'B') return false;
+// ============================================================================ //upgrade
+// isFrozenSquare — mở rộng isBoxDeadlocked (game/rules.cpp) cho thế kẹt "khối //upgrade
+// vuông 2x2" giữa HỘP VỚI HỘP (isBoxDeadlocked chỉ xét tường quanh 1 hộp, //upgrade
+// không biết hộp khác cũng có thể đóng vai trò như tường tạm thời). //upgrade
+// //upgrade
+// Nếu 1 ô p (dự định đặt hộp vào đó) cùng với 2 ô kề trục + 1 ô chéo tạo //upgrade
+// thành 1 hình vuông 2x2 mà cả 4 ô đều là tường hoặc có hộp khác, thì không //upgrade
+// hộp nào trong khối đó còn đẩy được nữa: với hộp tại 1 góc bất kỳ của khối, //upgrade
+// mọi hướng đẩy đều cần "dest" hoặc "stand" trùng đúng 1 trong 2 ô kề trục //upgrade
+// còn lại của khối (đã bị chiếm) — xem chứng minh chi tiết ở bản gốc //upgrade
+// greedy_bot2/rules.cpp. Đây là luật deadlock chuẩn, không phụ thuộc đích ở //upgrade
+// đâu nên không bao giờ chặn nhầm 1 nước đi còn khả thi (chỉ có thể bỏ sót //upgrade
+// thế kẹt phức tạp hơn 2x2, không bao giờ false-positive). //upgrade
+inline bool isFrozenSquare(const Grid& g, Pos p, const vector<Pos>& otherBoxes) { //upgrade
+    if (g.cell[p.r][p.c] == 'A' || g.cell[p.r][p.c] == 'B') return false; //upgrade
 
-    auto occupied = [&](Pos q) {
-        if (g.isWall(q)) return true;
-        for (const Pos& b : otherBoxes) if (b == q) return true;
-        return false;
-    };
+    auto occupied = [&](Pos q) { //upgrade
+        if (g.isWall(q)) return true; //upgrade
+        for (const Pos& b : otherBoxes) if (b == q) return true; //upgrade
+        return false; //upgrade
+    }; //upgrade
 
-    const int quadR[] = {-1, -1, 1, 1};
-    const int quadC[] = {-1, 1, -1, 1};
-    for (int k = 0; k < 4; ++k) {
-        Pos horiz = {p.r, p.c + quadC[k]};
-        Pos vert  = {p.r + quadR[k], p.c};
-        Pos diag  = {p.r + quadR[k], p.c + quadC[k]};
-        if (occupied(horiz) && occupied(vert) && occupied(diag)) return true;
-    }
-    return false;
-}
+    const int quadR[] = {-1, -1, 1, 1}; //upgrade
+    const int quadC[] = {-1, 1, -1, 1}; //upgrade
+    for (int k = 0; k < 4; ++k) { //upgrade
+        Pos horiz = {p.r, p.c + quadC[k]}; //upgrade
+        Pos vert  = {p.r + quadR[k], p.c}; //upgrade
+        Pos diag  = {p.r + quadR[k], p.c + quadC[k]}; //upgrade
+        if (occupied(horiz) && occupied(vert) && occupied(diag)) return true; //upgrade
+    } //upgrade
+    return false; //upgrade
+} //upgrade
 
-// Với mỗi hộp, ước lượng tổng số bước đối thủ cần (đi tới cạnh hộp + hộp di
-// chuyển tới đích của họ) để tự mình ghi điểm bằng hộp đó. Dùng bfsAvoid/
-// bfsToGoals sẵn có của bot3 (né hộp khác + agent của MÌNH khi tính đường đi
-// của đối thủ), không mô phỏng đẩy hộp từng bước, chỉ ước lượng khoảng cách.
-vector<int> opponentThreat(const gamestate& state, bool isa) {
-    Pos agent = isa ? state.a : state.b;
-    Pos other = isa ? state.b : state.a;
-    char enemyGoal = isa ? 'B' : 'A';
+// Với mỗi hộp, ước lượng tổng số bước đối thủ cần (đi tới cạnh hộp + hộp di //upgrade
+// chuyển tới đích của họ) để tự mình ghi điểm bằng hộp đó. Dùng bfsAvoid/ //upgrade
+// bfsToGoals sẵn có của bot3 (né hộp khác + agent của MÌNH khi tính đường đi //upgrade
+// của đối thủ), không mô phỏng đẩy hộp từng bước, chỉ ước lượng khoảng cách. //upgrade
+vector<int> opponentThreat(const gamestate& state, bool isa) { //upgrade
+    Pos agent = isa ? state.a : state.b; //upgrade
+    Pos other = isa ? state.b : state.a; //upgrade
+    char enemyGoal = isa ? 'B' : 'A'; //upgrade
 
-    vector<vector<int>> distToEnemyGoal = bfsToGoals(state.grid, enemyGoal);
+    vector<vector<int>> distToEnemyGoal = bfsToGoals(state.grid, enemyGoal); //upgrade
 
-    vector<int> threat(state.boxes.size(), INF);
-    for (size_t i = 0; i < state.boxes.size(); ++i) {
-        Pos box = state.boxes[i];
-        if (distToEnemyGoal[box.r][box.c] == INF) continue;
+    vector<int> threat(state.boxes.size(), INF); //upgrade
+    for (size_t i = 0; i < state.boxes.size(); ++i) { //upgrade
+        Pos box = state.boxes[i]; //upgrade
+        if (distToEnemyGoal[box.r][box.c] == INF) continue; //upgrade
 
-        Occupancy occ = emptyOccupancy();
-        for (size_t j = 0; j < state.boxes.size(); ++j) {
-            if (j == i) continue;
-            Pos b = state.boxes[j];
-            if (state.grid.checkin(b)) occ[b.r][b.c] = true;
-        }
-        if (state.grid.checkin(agent)) occ[agent.r][agent.c] = true;
+        Occupancy occ = emptyOccupancy(); //upgrade
+        for (size_t j = 0; j < state.boxes.size(); ++j) { //upgrade
+            if (j == i) continue; //upgrade
+            Pos b = state.boxes[j]; //upgrade
+            if (state.grid.checkin(b)) occ[b.r][b.c] = true; //upgrade
+        } //upgrade
+        if (state.grid.checkin(agent)) occ[agent.r][agent.c] = true; //upgrade
 
-        vector<vector<int>> oppDist = bfsAvoid(state.grid, other, occ);
+        vector<vector<int>> oppDist = bfsAvoid(state.grid, other, occ); //upgrade
 
-        int bestApproach = INF;
-        for (int k = 0; k < 4; ++k) {
-            Pos standCandidate = {box.r - dr[k], box.c - dc[k]};
-            if (!state.grid.isFree(standCandidate)) continue;
-            if (occ[standCandidate.r][standCandidate.c]) continue;
-            bestApproach = min(bestApproach, oppDist[standCandidate.r][standCandidate.c]);
-        }
-        if (bestApproach == INF) continue;
+        int bestApproach = INF; //upgrade
+        for (int k = 0; k < 4; ++k) { //upgrade
+            Pos standCandidate = {box.r - dr[k], box.c - dc[k]}; //upgrade
+            if (!state.grid.isFree(standCandidate)) continue; //upgrade
+            if (occ[standCandidate.r][standCandidate.c]) continue; //upgrade
+            bestApproach = min(bestApproach, oppDist[standCandidate.r][standCandidate.c]); //upgrade
+        } //upgrade
+        if (bestApproach == INF) continue; //upgrade
 
-        threat[i] = bestApproach + distToEnemyGoal[box.r][box.c];
-    }
-    return threat;
-}
+        threat[i] = bestApproach + distToEnemyGoal[box.r][box.c]; //upgrade
+    } //upgrade
+    return threat; //upgrade
+} //upgrade
 
 // BOT 1 — Greedy nearest box, NHƯNG có nhắm ô đích.
 // Chọn cặp (hộp, hướng đẩy) sao cho cú đẩy làm hộp TIẾN GẦN ô đích của mình,
@@ -112,16 +112,16 @@ vector<int> opponentThreat(const gamestate& state, bool isa) {
 // (Bản cũ chỉ đi tới hộp gần nhất rồi đẩy theo hướng BFS tuỳ ý, nên hộp bị
 //  đẩy đi lung tung và gần như không bao giờ ghi được điểm.)
 //
-// Đã bổ sung 2 phần port từ greedy_bot2 (kiểm chứng có lợi bằng đấu thử):
-//   - Nhận thức đối thủ (opponentThreat ở trên): ưu tiên tranh hộp còn kịp,
-//     hạ ưu tiên hộp chắc chắn thua đối thủ trong cuộc đua.
-//   - isFrozenSquare ở trên: chặn thêm thế kẹt "khối vuông 2x2" giữa hộp với
-//     hộp/tường, ngoài isBoxDeadlocked (chỉ xét 1 hộp/tường).
-//
-// CHƯA đổi: fallback khi hết nước đẩy có lợi vẫn là "tiến tới hộp gần nhất"
-// như bản gốc (KHÔNG chuyển sang kiểu "chặn đường đối thủ" như greedy_bot2) —
-// đây là giả thuyết đang mở, chưa kiểm chứng, về nguyên nhân greedy_bot2 vẫn
-// thắng nhỉnh hơn bản upgrade này (~55-57% số ván phân thắng bại).
+// Đã bổ sung 2 phần port từ greedy_bot2 (kiểm chứng có lợi bằng đấu thử): //upgrade
+//   - Nhận thức đối thủ (opponentThreat ở trên): ưu tiên tranh hộp còn kịp, //upgrade
+//     hạ ưu tiên hộp chắc chắn thua đối thủ trong cuộc đua. //upgrade
+//   - isFrozenSquare ở trên: chặn thêm thế kẹt "khối vuông 2x2" giữa hộp với //upgrade
+//     hộp/tường, ngoài isBoxDeadlocked (chỉ xét 1 hộp/tường). //upgrade
+// //upgrade
+// CHƯA đổi: fallback khi hết nước đẩy có lợi vẫn là "tiến tới hộp gần nhất" //upgrade
+// như bản gốc (KHÔNG chuyển sang kiểu "chặn đường đối thủ" như greedy_bot2) — //upgrade
+// đây là giả thuyết đang mở, chưa kiểm chứng, về nguyên nhân greedy_bot2 vẫn //upgrade
+// thắng nhỉnh hơn bản upgrade này (~55-57% số ván phân thắng bại). //upgrade
 //
 // Timer: kiểm tra istimeup() mỗi 8 lần lặp (không phải mỗi lần lặp, để
 // tránh overhead gọi chrono::now() quá thường xuyên trên vòng lặp nhỏ
@@ -137,17 +137,17 @@ char botGreedy(const gamestate& state, bool isa, const Timer& timer) {
     Occupancy occ = buildOccupancy(state, isa);
     vector<vector<int>> distAgent = bfsAvoid(state.grid, agent, occ);
     vector<vector<int>> distGoal  = bfsToGoals(state.grid, myGoal);
-    vector<int> threat = opponentThreat(state, isa);
+    vector<int> threat = opponentThreat(state, isa); //upgrade
 
     bool found = false;
-    int bestScore = INF;
+    int bestScore = INF; //upgrade
     Pos bestStand = {-1, -1};
     char bestDir = 'S';
 
     int iterCount = 0;
     bool timedOut = false;
-    for (size_t bi = 0; bi < state.boxes.size() && !timedOut; ++bi) {
-        Pos box = state.boxes[bi];
+    for (size_t bi = 0; bi < state.boxes.size() && !timedOut; ++bi) { //upgrade
+        Pos box = state.boxes[bi]; //upgrade
 
         // TASK DEADLOCK-01: hộp đã kẹt vĩnh viễn (isBoxDeadlocked) không còn
         // hướng đẩy khả thi nào (đã chứng minh trong rules.cpp) -- bỏ qua
@@ -156,8 +156,8 @@ char botGreedy(const gamestate& state, bool isa, const Timer& timer) {
         // ý và tiết kiệm 1 vòng lặp con).
         if (isBoxDeadlocked(state.grid, box)) continue;
 
-        vector<Pos> otherBoxes;
-        for (size_t j = 0; j < state.boxes.size(); ++j) if (j != bi) otherBoxes.push_back(state.boxes[j]);
+        vector<Pos> otherBoxes; //upgrade
+        for (size_t j = 0; j < state.boxes.size(); ++j) if (j != bi) otherBoxes.push_back(state.boxes[j]); //upgrade
 
         for (int i = 0; i < 4; ++i) {
             if ((++iterCount % 8) == 0 && timer.istimeup()) { timedOut = true; break; }
@@ -191,7 +191,7 @@ char botGreedy(const gamestate& state, bool isa, const Timer& timer) {
             char destCell = state.grid.cell[dest.r][dest.c];
             bool destIsGoal = (destCell == 'A' || destCell == 'B');
             if (!destIsGoal && isBoxDeadlocked(state.grid, dest)) continue;
-            if (!destIsGoal && isFrozenSquare(state.grid, dest, otherBoxes)) continue;
+            if (!destIsGoal && isFrozenSquare(state.grid, dest, otherBoxes)) continue; //upgrade
 
             int dBox  = min(distGoal[box.r][box.c], GREEDY_DIST_CAP);
             int dDest = min(distGoal[dest.r][dest.c], GREEDY_DIST_CAP);
@@ -203,24 +203,24 @@ char botGreedy(const gamestate& state, bool isa, const Timer& timer) {
             else cost = distAgent[stand.r][stand.c];
             if (cost >= INF) continue;
 
-            // Chi phí đi bộ quyết định trước, gain chỉ phá hòa (như hành vi gốc).
-            int score = cost * COST_WEIGHT - gain;
+            // Chi phí đi bộ quyết định trước, gain chỉ phá hòa (như hành vi gốc). //upgrade
+            int score = cost * COST_WEIGHT - gain; //upgrade
 
-            // Điều chỉnh theo mức độ tranh chấp với đối thủ (phá hòa/gần-hòa).
-            int myTotal = dDest + cost;
-            int oppTotal = threat[bi];
-            if (oppTotal != INF) {
-                if (myTotal <= oppTotal) {
-                    int urgency = max(0, CONTEST_RANGE - oppTotal);
-                    score -= urgency * CONTEST_WEIGHT;
-                } else {
-                    score += (myTotal - oppTotal) * LOSING_RACE_PENALTY;
-                }
-            }
+            // Điều chỉnh theo mức độ tranh chấp với đối thủ (phá hòa/gần-hòa). //upgrade
+            int myTotal = dDest + cost; //upgrade
+            int oppTotal = threat[bi]; //upgrade
+            if (oppTotal != INF) { //upgrade
+                if (myTotal <= oppTotal) { //upgrade
+                    int urgency = max(0, CONTEST_RANGE - oppTotal); //upgrade
+                    score -= urgency * CONTEST_WEIGHT; //upgrade
+                } else { //upgrade
+                    score += (myTotal - oppTotal) * LOSING_RACE_PENALTY; //upgrade
+                } //upgrade
+            } //upgrade
 
-            if (!found || score < bestScore) {
+            if (!found || score < bestScore) { //upgrade
                 found = true;
-                bestScore = score;
+                bestScore = score; //upgrade
                 bestStand = stand;
                 bestDir = DIRCH[i];
             }
