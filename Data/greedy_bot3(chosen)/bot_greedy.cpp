@@ -1,8 +1,8 @@
 #pragma once
 #include <bits/stdc++.h>
-#include "../game/rules.cpp"
-#include "../search/bfs.cpp"
-#include "../core/timer.cpp"
+#include "rules.cpp"
+#include "bfs.cpp"
+#include "timer.cpp"
 using namespace std;
 
 const int GREEDY_DIST_CAP = 40;

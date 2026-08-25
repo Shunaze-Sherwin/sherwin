@@ -1,6 +1,6 @@
 #pragma once
 #include <bits/stdc++.h>
-#include "../core/grid.cpp"
+#include "grid.cpp"
 using namespace std;
 
 const int INF = 1e9;
